@@ -195,7 +195,8 @@ export function disconnect() {
  * 注册回调
  */
 export function on(event, fn) {
-  callbacks[event] = fn
+  const key = 'on' + event.charAt(0).toUpperCase() + event.slice(1)
+  callbacks[key] = fn
 }
 
 /**
