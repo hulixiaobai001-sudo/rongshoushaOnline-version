@@ -188,10 +188,13 @@ export function Lobby({ onBack }: LobbyProps) {
                 </CardContent>
               </Card>
 
-              <Button onClick={handleStartGame} disabled={players.length < 2}
+              <Button onClick={handleStartGame} disabled={players.length < 4}
                 className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
-                <Play className="w-5 h-5 mr-2" />开始游戏（{players.length}人）
+                <Play className="w-5 h-5 mr-2" />开始游戏（{players.length}/4人）
               </Button>
+              {players.length < 4 && (
+                <p className="text-xs text-slate-400 text-center">至少需要4人才能开始</p>
+              )}
 
               {status && <p className="text-xs text-slate-400 text-center">{status}</p>}
             </>
