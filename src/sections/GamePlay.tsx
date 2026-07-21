@@ -104,9 +104,9 @@ export function GamePlay() {
         <p className="text-xs md:text-sm text-amber-800">{actionHint}</p>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-2 md:gap-3 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-2 md:gap-3 min-h-0 overflow-hidden">
         {/* 左侧：地图 */}
-        <Card className="flex-1 flex flex-col min-h-[200px]">
+        <Card className="flex-1 flex flex-col min-h-[200px] max-h-[45vh] lg:max-h-none">
           <CardHeader className="pb-2 shrink-0 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Navigation className="w-4 h-4 text-blue-600" />
@@ -131,47 +131,39 @@ export function GamePlay() {
         </Card>
 
         {/* 右侧：角色操作卡片 / 凌宇神社查看 */}
-        <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0">
+        <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none overflow-hidden">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="flex items-center gap-2 text-sm">
               {phase === 'shrine_vision' ? (
-                <>
-                  <Eye className="w-4 h-4 text-purple-600" />
-                  凌宇神社 - 神视
-                </>
+                <><Eye className="w-4 h-4 text-purple-600" />凌宇神社 - 神视</>
               ) : (
-                <>
-                  <Users className="w-4 h-4 text-indigo-600" />
-                  角色操作面板
-                </>
+                <><Users className="w-4 h-4 text-indigo-600" />角色操作面板</>
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 p-0">
+          <CardContent className="flex-1 min-h-0 p-0 overflow-auto">
             {phase === 'shrine_vision' ? (
               <ShrineVisionPanel />
             ) : (
-              <ScrollArea className="h-full px-4 pb-4">
-                <div className="space-y-3">
-                  {players.map((player, index) => (
-                    <PlayerActionCard
-                      key={player.id}
-                      index={index}
-                      player={player}
-                      allPlayers={players}
-                      locations={locations}
-                      phase={phase}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
+              <div className="px-3 md:px-4 pb-4 space-y-3">
+                {players.map((player, index) => (
+                  <PlayerActionCard
+                    key={player.id}
+                    index={index}
+                    player={player}
+                    allPlayers={players}
+                    locations={locations}
+                    phase={phase}
+                  />
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
 
       {/* 底部阶段控制 */}
-      <div className="flex gap-2 shrink-0">
+      <div className="flex gap-2 shrink-0 sticky bottom-0 bg-white p-2 rounded-lg border shadow-sm">
         <Button onClick={nextPhase} className="flex-1 font-semibold" size="sm">
           进入下一阶段
           <ChevronRight className="w-4 h-4 ml-1" />
