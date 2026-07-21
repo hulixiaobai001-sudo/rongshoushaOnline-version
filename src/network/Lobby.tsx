@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { createRoom, joinRoom, disconnect, on, broadcast, MSG, getState } from './peerjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw } from 'lucide-react'
 
