@@ -1,11 +1,11 @@
 export function createRoom(): Promise<{ roomId: string; playerId: string; isHost: boolean }>
 export function joinRoom(roomId: string): Promise<{ roomId: string; playerId: string; isHost: boolean }>
-export function broadcast(data: Record<string, unknown>): void
-export function sendAction(action: string, data?: Record<string, unknown>): void
-export function sendCommand(command: string, data?: Record<string, unknown>, targetPeerId?: string | null): void
+export function broadcast(data: Record<string, any>): void
+export function sendAction(action: string, data?: Record<string, any>): void
+export function sendCommand(command: string, data?: Record<string, any>, targetPeerId?: string | null): void
 export function disconnect(): void
 export function getState(): { isHost: boolean; roomId: string | null; myId: string | null; playerCount: number }
-export function on(event: string, fn: (...args: unknown[]) => void): void
+export function on(event: string, fn: (...args: any[]) => void): void
 
 export const MSG: {
   PLAYER_MOVE: string
