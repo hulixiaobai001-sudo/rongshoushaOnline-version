@@ -278,7 +278,7 @@ export const HERO_POOL: Hero[] = [
     name: '夜羽',
     title: '间谍史莱姆',
     description: '迷宫三刃之一，大馋史莱姆。',
-    color: '#374151',
+    color: '#a855f7', // 紫色（原#374151在暗色背景下不可见）
     speed: 10,
     assets: {
       // TODO: 添加头像图片
@@ -311,7 +311,7 @@ export const HERO_POOL: Hero[] = [
     name: '白野',
     title: '调香师',
     description: '凌宇神社的调香师，天真活泼调皮可爱还有点笨笨的。',
-    color: '#1e293b', // 黑色（深色，保证可读性）
+    color: '#f59e0b', // 琥珀色（原#1e293b在暗色背景下不可见）
     speed: 120,
     assets: {
       // TODO: 添加头像图片
