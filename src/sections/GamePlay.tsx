@@ -104,7 +104,7 @@ export function GamePlay() {
         <p className="text-xs md:text-sm text-amber-800">{actionHint}</p>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-2 md:gap-3 min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-2 md:gap-3 min-h-0 overflow-auto">
         {/* 左侧：地图 */}
         <Card className="flex-1 flex flex-col min-h-[200px] max-h-[45vh] lg:max-h-none">
           <CardHeader className="pb-2 shrink-0 flex flex-row items-center justify-between">
@@ -131,7 +131,7 @@ export function GamePlay() {
         </Card>
 
         {/* 右侧：角色操作卡片 / 凌宇神社查看 */}
-        <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none overflow-hidden">
+        <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="flex items-center gap-2 text-sm">
               {phase === 'shrine_vision' ? (
