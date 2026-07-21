@@ -1222,7 +1222,12 @@ function PlayerActionCard({
                 追踪日志
               </span>
               <span className="text-[10px] text-slate-400">
-                （目标：{allPlayers.find((p) => p.id === trackedPlayerId)?.name || '?'}）
+                （目标：{(() => {
+                  const t = allPlayers.find((p) => p.id === trackedPlayerId);
+                  if (!t) return '?';
+                  const idx = allPlayers.indexOf(t) + 1;
+                  return `编号${idx} - ${t.name}`;
+                })()}）
               </span>
             </div>
             <div className="space-y-1">
@@ -1273,16 +1278,11 @@ function PlayerActionCard({
               return visitors.length > 0 ? (
                 <div className="space-y-1">
                   {visitors.map((v, idx) => {
-                    const vHero = v!.heroId ? getHeroById(v!.heroId) : null;
+                    const playerIndex = allPlayers.indexOf(v!) + 1;
                     return (
                       <div key={idx} className="flex items-center gap-2 text-[11px] bg-slate-50 rounded px-2 py-1">
-                        <span className="text-slate-400 font-mono shrink-0">{idx + 1}.</span>
+                        <span className="text-slate-400 font-mono shrink-0">{playerIndex}.</span>
                         <span className="font-medium text-slate-700">{v!.name}</span>
-                        {vHero && (
-                          <Badge variant="outline" className="text-[10px] h-4 px-1" style={{ borderColor: vHero.color + '60', color: vHero.color }}>
-                            {vHero.name}
-                          </Badge>
-                        )}
                         <Badge variant="outline" className="text-[10px] h-4 ml-auto" style={{ borderColor: getIdentityColor(v!.identity), color: getIdentityColor(v!.identity) }}>
                           {getIdentityName(v!.identity)}
                         </Badge>
