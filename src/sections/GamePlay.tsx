@@ -381,8 +381,12 @@ function PlayerActionCard({
     : [];
 
   // 商业街人头攒动效果：平民在此探查时看不到周围的人和尸体
+/*
   const isCrowded = isInvestigatePhase
     && player.identity === 'civilian'
+    && loc?.effect?.type === 'crowded';
+*/
+  const isCrowded = player.identity === 'civilian'
     && loc?.effect?.type === 'crowded';
 
   // 处理移动输入
