@@ -107,38 +107,33 @@ export function GamePlay() {
 
       <div className="flex-1 flex flex-col lg:flex-row gap-2 md:gap-3 min-h-0">
         {/* 左侧：地图 */}
-        <Card className="flex-1 flex flex-col min-h-0 max-h-[40vh] lg:max-h-none">
+        <Card className="flex-1 flex flex-col min-h-0" style={{ minHeight: '200px' }}>
           <CardHeader className="pb-2 shrink-0 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Navigation className="w-4 h-4 text-blue-600" />
-              游戏地图（地点编号）
+              游戏地图
             </CardTitle>
-            {/* 显示模式切换 */}
             <button
               onClick={() => setShowKillers(!showKillers)}
               className="bg-white rounded-md px-2 py-1 shadow-sm border text-[11px] font-medium flex items-center gap-1 hover:bg-slate-50 transition-colors"
               title={showKillers ? '切换到隐藏杀手' : '切换到显示杀手'}
             >
               {showKillers ? (
-                <>
-                  <Eye className="w-3 h-3 text-red-600" />
-                  <span className="text-red-700">显杀手</span>
-                </>
+                <><Eye className="w-3 h-3 text-red-600" /><span className="text-red-700">显杀手</span></>
               ) : (
-                <>
-                  <EyeOff className="w-3 h-3 text-blue-600" />
-                  <span className="text-blue-700">隐杀手</span>
-                </>
+                <><EyeOff className="w-3 h-3 text-blue-600" /><span className="text-blue-700">隐杀手</span></>
               )}
             </button>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 p-2">
-            <GameMapWithNumbers showKillers={showKillers} />
+          <CardContent className="flex-1 p-1 md:p-2" style={{ minHeight: 0 }}>
+            <div className="w-full h-full" style={{ minHeight: '250px' }}>
+              <GameMapWithNumbers showKillers={showKillers} />
+            </div>
           </CardContent>
         </Card>
 
         {/* 右侧：角色操作卡片 / 凌宇神社查看 */}
-        <Card className="w-full lg:w-[540px] shrink-0 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none">
+        <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="flex items-center gap-2 text-sm">
               {phase === 'shrine_vision' ? (
@@ -1322,11 +1317,12 @@ function GameMapWithNumbers({ showKillers = true }: { showKillers?: boolean }) {
   };
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative" style={{ minHeight: '250px' }}>
       <svg
         viewBox={`0 0 ${MAP_W} ${MAP_H}`}
         className="w-full h-full bg-slate-50 rounded-lg border"
-        style={{ maxHeight: '100%' }}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ minHeight: '250px' }}
       >
         {/* 连线 */}
         {locations.map((loc) =>
