@@ -1,27 +1,31 @@
 import { useState, useEffect } from 'react'
-import { createRoom, joinRoom, disconnect, getState, on, broadcast, MSG } from './peerjs'
+import { createRoom, joinRoom, disconnect, on, broadcast, MSG } from './peerjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Copy, Check, Wifi, ArrowLeft } from 'lucide-react'
+import { Users, Copy, Check, Wifi } from 'lucide-react'
 
-export function Lobby({ onEnterGame }) {
-  const [mode, setMode] = useState(null) // 'host' | 'join' | null
+interface LobbyProps {
+  onEnterGame?: (info: { isHost: boolean; roomCode: string }) => void
+}
+
+export function Lobby({ onEnterGame }: LobbyProps) {
+  const [mode, setMode] = useState<'host' | 'join' | null>(null)
   const [roomCode, setRoomCode] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [status, setStatus] = useState('')
-  const [players, setPlayers] = useState([])
+  const [players, setPlayers] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    on('playerJoin', (playerId) => {
-      setPlayers((prev) => [...prev, playerId])
+    on('playerJoin', (playerId: string) => {
+      setPlayers((prev: string[]) => [...prev, playerId])
     })
-    on('playerLeave', (playerId) => {
-      setPlayers((prev) => prev.filter((id) => id !== playerId))
+    on('playerLeave', (playerId: string) => {
+      setPlayers((prev: string[]) => prev.filter((id: string) => id !== playerId))
     })
-    return () => disconnect()
+    return () => { disconnect() }
   }, [])
 
   const handleCreateRoom = async () => {
@@ -32,12 +36,8 @@ export function Lobby({ onEnterGame }) {
       setRoomCode(room.roomId)
       setPlayers([room.playerId])
       setStatus('房间已创建，等待玩家加入...')
-
-      on('playerAction', (data) => {
-        // 暂不处理
-      })
-    } catch (e) {
-      setStatus('创建失败：' + e.message)
+    } catch (e: unknown) {
+      setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -49,8 +49,8 @@ export function Lobby({ onEnterGame }) {
       setMode('join')
       setRoomCode(room.roomId)
       setStatus('已加入房间，等待房主开始游戏...')
-    } catch (e) {
-      setStatus('加入失败：' + e.message)
+    } catch (e: unknown) {
+      setStatus('加入失败：' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
