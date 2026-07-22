@@ -5,10 +5,11 @@ import { getReachableLocations } from '@/data/gameData'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { HeroSkill } from '@/types/hero'
 import {
   Map, MessageSquare, ChevronUp, ChevronDown,
   Footprints, Swords, Zap, Eye, ArrowLeft,
-  Check, Clock, AlertCircle, X
+  Check, Clock, AlertCircle, X, Target
 } from 'lucide-react'
 import { LoadingScreen } from './LoadingScreen'
 
@@ -19,7 +20,7 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-type PopupType = 'confirm' | 'info' | 'coming_soon'
+type PopupType = 'confirm' | 'info'
 
 interface Popup {
   type: PopupType
@@ -37,10 +38,10 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
   const phase = useGameStore((s) => s.phase)
   const [popup, setPopup] = useState<Popup | null>(null)
   const [selectedAction, setSelectedAction] = useState<string | null>(null)
+  const [skillTargetMode, setSkillTargetMode] = useState<HeroSkill | null>(null)
 
   const { players, locations, round, movePlayer, nextPhase } = useGameStore()
 
-  // 调试模式：空壳自动准备
   useEffect(() => {
     if (!loading && debugMode && !allReady) {
       const timer = setTimeout(() => {
@@ -55,16 +56,11 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
     }
   }, [loading, debugMode, allReady])
 
-  const confirm = (title: string, onConfirm: () => void, confirmText = '确定执行') => {
+  const confirm = (title: string, onConfirm: () => void, confirmText = '确定') => {
     setPopup({ type: 'confirm', title, onConfirm, confirmText })
   }
-
   const info = (title: string, desc: string) => {
     setPopup({ type: 'info', title, desc })
-  }
-
-  const comingSoon = () => {
-    setPopup({ type: 'coming_soon', title: '敬请期待', desc: '此功能正在开发中 🦊' })
   }
 
   if (loading) {
@@ -77,6 +73,9 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
     ? players.filter((p) => p.id !== currentPlayer.id && p.locationId === currentPlayer.locationId && p.status === 'alive')
     : []
 
+  // 所有存活玩家（供 any_player 技能选目标）
+  const allAlivePlayers = players.filter((p) => p.id !== currentPlayer?.id && p.status === 'alive')
+
   const phaseName: Record<string, string> = {
     investigate1: '探查①', action1: '行动①', settlement1: '结算①', move1: '移动②',
     investigate2: '探查②', action2: '行动②', settlement2: '结算②', move2: '移动③',
@@ -85,33 +84,203 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
     death_report: '死亡播报', speak: '发言', vote: '投票', end: '结束',
   }
 
-  // 可到达地点
   const reachable = currentPlayer
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
 
-  // 执行移动
+  // ============ 技能使用 ============
+  const executeSkill = (skill: HeroSkill, target?: string) => {
+    const skillName = skill.name
+    switch (skill.id) {
+      case 'yeyu_stealth':
+        info('技能已使用', `【${skillName}】进入隐匿状态，将跳过下一个行动阶段`)
+        break
+      case 'fengming_teleport':
+        info('技能已使用', `【${skillName}】传送已激活，下次移动可到达任意地点`)
+        break
+      case 'zhuxun_double_move':
+        info('技能已使用', `【${skillName}】疾行已激活，本移动阶段可连续移动两次`)
+        break
+      case 'niangao_kungfu':
+        info('技能已使用', `【${skillName}】功夫已激活！本行动阶段内任何攻击都将被反击`)
+        break
+      case 'xiling_kill_same_room': {
+        const targetPlayer = players.find((p) => p.id === target)
+        info('技能已使用', `【${skillName}】对 ${targetPlayer?.name || '目标'} 发起影杀！`)
+        break
+      }
+      case 'kexiong_investigate':
+      case 'tianyi_investigate_same_room': {
+        const targetPlayer = players.find((p) => p.id === target)
+        info('技能已使用', `【${skillName}】查验 ${targetPlayer?.name || '目标'} 的身份`)
+        break
+      }
+      case 'yanzhuo_suplex': {
+        const targetPlayer = players.find((p) => p.id === target)
+        info('技能已使用', `【${skillName}】对 ${targetPlayer?.name || '目标'} 使用过肩摔，目标将跳过下一个行动阶段`)
+        break
+      }
+      case 'baiye_track': {
+        const targetPlayer = players.find((p) => p.id === target)
+        info('技能已使用', `【${skillName}】已标记 ${targetPlayer?.name || '目标'}，将追踪其本轮后续行动`)
+        break
+      }
+      case 'zhangyang_cut_connection':
+        info('技能已使用', `【${skillName}】切断道路（需选择两个地点，待实现）`)
+        break
+      case 'jiangfeng_drone':
+        info('技能已使用', `【${skillName}】在当前地点放置侦察无人机，开始记录经过人员`)
+        break
+      case 'wangli_big_shot':
+        info('技能已使用', `【${skillName}】大力射门！选择一个相邻地点，该地点内所有玩家下回合无法行动`)
+        break
+      default:
+        info('技能已使用', `【${skillName}】${skill.description}`)
+    }
+    setSkillTargetMode(null)
+    setSelectedAction(null)
+    setActionOpen(false)
+  }
+
+  const handleSkillClick = (skill: HeroSkill) => {
+    if (!phase.startsWith('action') && skill.usablePhase.some((p) => p === 'vote')) {
+      // vote阶段技能允许
+    } else if (!skill.usablePhase.some((p) => phase.startsWith(p))) {
+      info('无法使用', `【${skill.name}】只能在 ${skill.usablePhase.join(', ')} 阶段使用`)
+      return
+    }
+
+    if (skill.targetType === 'self') {
+      confirm(`使用【${skill.name}】？`, () => executeSkill(skill))
+    } else if (skill.targetType === 'same_location_player') {
+      if (sameLocationPlayers.length === 0) {
+        info('无目标', '附近没有其他玩家')
+        return
+      }
+      setSkillTargetMode(skill)
+      setSelectedAction('skill_target')
+    } else if (skill.targetType === 'any_player') {
+      if (allAlivePlayers.length === 0) {
+        info('无目标', '没有可选的存活玩家')
+        return
+      }
+      setSkillTargetMode(skill)
+      setSelectedAction('skill_target')
+    } else {
+      info(skill.name, `${skill.description}\n\n（需要选择目标，待实现）`)
+    }
+  }
+
+  // ============ 移动 ============
   const handleMove = (locId: string) => {
     const currentLoc = locations.find((l) => l.id === currentPlayer?.locationId)
     const targetLoc = locations.find((l) => l.id === locId)
     if (!currentPlayer || !currentLoc || !targetLoc) return
-    const isConnected = currentLoc.connectedTo.includes(locId)
-    if (isConnected) {
-      confirm(`从 ${currentLoc.name} 移动到 ${targetLoc.name}？`, () => {
+    if (currentLoc.connectedTo.includes(locId)) {
+      confirm(`从 ${currentLoc.name} 到 ${targetLoc.name}？`, () => {
         movePlayer(currentPlayer.id, locId)
         setSelectedAction(null)
         setActionOpen(false)
         info('移动成功', `已到达 ${targetLoc.name}`)
       })
     } else {
-      info('无法移动', `${currentLoc.name} 与 ${targetLoc.name} 之间没有道路相连`)
+      info('无法移动', '没有道路相连')
     }
+  }
+
+  // ============ 底部面板内容 ============
+  const renderBottomPanel = () => {
+    // 技能选目标模式
+    if (selectedAction === 'skill_target' && skillTargetMode) {
+      const targets = skillTargetMode.targetType === 'same_location_player' ? sameLocationPlayers : allAlivePlayers
+      return (
+        <div className="px-3 py-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-300 font-medium">
+              <Target className="w-3 h-3 inline mr-1" />选择目标 — {skillTargetMode.name}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedAction(null); setSkillTargetMode(null) }}
+              className="h-6 text-[10px] text-slate-400"><X className="w-3 h-3 mr-1" />取消</Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-auto">
+            {targets.map((p) => {
+              const pHero = p.heroId ? getHeroById(p.heroId) : null
+              return (
+                <Button key={p.id} variant="outline" size="sm"
+                  onClick={() => confirm(`对 ${p.name} 使用【${skillTargetMode.name}】？`, () => executeSkill(skillTargetMode, p.id))}
+                  className="h-7 text-[10px] border-slate-600 text-slate-300 hover:border-indigo-500 gap-1">
+                  <span className="w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: pHero?.color || '#6366f1' }}>
+                    {players.indexOf(p) + 1}
+                  </span>
+                  {p.name}
+                </Button>
+              )
+            })}
+          </div>
+          {targets.length === 0 && <p className="text-[10px] text-slate-500 text-center py-2">没有可选目标</p>}
+        </div>
+      )
+    }
+
+    // 移动选地点模式
+    if (selectedAction === 'move') {
+      return (
+        <div className="px-3 py-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-300 font-medium">选择目标地点</span>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedAction(null)}
+              className="h-6 text-[10px] text-slate-400"><X className="w-3 h-3 mr-1" />取消</Button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 max-h-32 overflow-auto">
+            {reachable.map((loc) => (
+              <Button key={loc.id} variant="outline" size="sm" onClick={() => handleMove(loc.id)}
+                className="h-8 text-[10px] border-slate-600 text-slate-300 hover:border-indigo-500">
+                {loc.name}
+              </Button>
+            ))}
+          </div>
+          {reachable.length === 0 && <p className="text-[10px] text-slate-500 text-center py-2">没有可到达的地点</p>}
+        </div>
+      )
+    }
+
+    // 主行动面板
+    return (
+      <>
+        <Button variant="ghost" onClick={() => setActionOpen(!actionOpen)}
+          className="w-full h-7 text-[11px] text-slate-300 hover:text-white rounded-none flex items-center justify-center gap-1">
+          {actionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          {actionOpen ? '收起' : '展开行动面板'}
+        </Button>
+        {actionOpen && (
+          <div className="px-3 pb-2 space-y-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
+              <ActionBtn icon={Footprints} label="移动" onClick={() => {
+                if (!phase.startsWith('move')) { info('非移动阶段', '当前不是移动阶段'); return }
+                setSelectedAction('move')
+              }} />
+              <ActionBtn icon={Swords} label="攻击" onClick={() => {
+                if (currentPlayer?.identity !== 'killer') { info('权限不足', '仅杀手可以攻击'); return }
+                if (!phase.startsWith('action')) { info('非行动阶段', '当前不是行动阶段'); return }
+                info('攻击', '攻击功能待实现')
+              }} />
+              <ActionBtn icon={Zap} label="技能" onClick={() => {
+                if (!phase.startsWith('action')) { info('非行动阶段', '当前不是行动阶段'); return }
+                setActionOpen(false)
+                info('选择技能', '请在右侧角色面板点击技能按钮')
+              }} />
+              <ActionBtn icon={Eye} label="侦查" onClick={() => info('侦查', '侦查功能待实现')} />
+            </div>
+          </div>
+        )}
+      </>
+    )
   }
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white">
-      {/* 顶部状态栏 */}
-      <header className="px-3 py-2 border-b border-slate-700 flex items-center gap-2 shrink-0 bg-slate-800/50">
+      <header className="px-3 py-2 border-b border-slate-700 flex items-center gap-2 shrink-0 bg-slate-800/50 z-10">
         <Button variant="ghost" size="sm" onClick={onLeave}
           className="h-7 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 shrink-0">
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -121,16 +290,13 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
         </Badge>
         <Badge className="text-[10px] bg-indigo-600">{phaseName[phase] || '游戏中'}</Badge>
         <Button variant="ghost" size="sm" onClick={() => confirm('进入下一阶段？', () => nextPhase())}
-          className="h-6 text-[10px] text-slate-300 hover:text-white px-1.5">
-          下一阶段 ▸
-        </Button>
+          className="h-6 text-[10px] text-slate-300 hover:text-white px-1.5">下一阶段 ▸</Button>
         <div className="flex-1" />
         {isHost && <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-700">房主</Badge>}
         {debugMode && <Badge className="text-[10px] bg-amber-600">调试</Badge>}
       </header>
 
-      {/* 准备阶段 */}
-      {!allReady && (
+      {!allReady ? (
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
           <Card className="w-full max-w-sm bg-slate-800 border-slate-700">
             <CardContent className="p-6 text-center space-y-4">
@@ -152,23 +318,16 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                   )
                 })}
               </div>
-              {!ready ? (
-                <Button onClick={() => setReady(true)} className="w-full bg-emerald-600 hover:bg-emerald-700">我准备好了</Button>
-              ) : !allReady ? (
-                <p className="text-xs text-amber-400">等待其他玩家准备中...</p>
-              ) : null}
+              {!ready ? <Button onClick={() => setReady(true)} className="w-full bg-emerald-600 hover:bg-emerald-700">我准备好了</Button>
+                : !allReady ? <p className="text-xs text-amber-400">等待其他玩家准备中...</p> : null}
             </CardContent>
           </Card>
         </div>
-      )}
-
-      {/* 游戏主界面 */}
-      {allReady && (
+      ) : (
         <div className="flex-1 flex flex-col min-h-0">
-          {/* 主内容区：地图 + 右侧面板 */}
           <div className="flex-1 flex flex-col lg:flex-row gap-2 p-2 min-h-0 overflow-hidden">
-            {/* 左侧：大地图 */}
-            <Card className="flex-1 flex flex-col min-h-[150px] bg-slate-800 border-slate-700 overflow-hidden">
+            {/* 大地图 */}
+            <Card className="flex-1 flex flex-col min-h-[120px] bg-slate-800 border-slate-700 overflow-hidden">
               <CardContent className="flex-1 p-1 min-h-0">
                 {locations.length > 0 ? (
                   <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
@@ -185,17 +344,13 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                       const isCurrentLoc = locPlayers.some((p) => p.id === currentPlayer?.id)
                       return (
                         <g key={loc.id}>
-                          {/* 节点圆 */}
                           <circle cx={loc.x} cy={loc.y} r={4}
                             fill={isCurrentLoc ? '#4f46e5' : locPlayers.length > 0 ? '#475569' : '#334155'}
-                            stroke={isCurrentLoc ? '#818cf8' : '#475569'}
-                            strokeWidth="0.8" />
-                          {/* 地点名 */}
+                            stroke={isCurrentLoc ? '#818cf8' : '#475569'} strokeWidth="0.8" />
                           <text x={loc.x} y={loc.y + 8} textAnchor="middle" fontSize="2.4" fill="#94a3b8"
                             style={{ pointerEvents: 'none', userSelect: 'none' }}>
                             {loc.name.length > 4 ? loc.name.slice(0, 4) + '..' : loc.name}
                           </text>
-                          {/* 玩家图标 */}
                           {locPlayers.map((p, i) => {
                             const angle = ((2 * Math.PI * i) / Math.max(locPlayers.length, 1)) - Math.PI / 2
                             const px = loc.x + Math.cos(angle) * 6
@@ -207,10 +362,8 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                                 <circle cx={px} cy={py} r={2.2}
                                   fill={isMe ? '#818cf8' : pHero?.color || '#6366f1'}
                                   stroke={isMe ? '#fff' : '#1e293b'} strokeWidth="0.4" />
-                                <text x={px} y={py + 0.8} textAnchor="middle" fontSize="2.4" fill="white"
-                                  fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                                  {players.indexOf(p) + 1}
-                                </text>
+                                <text x={px} y={py + 0.8} textAnchor="middle" fontSize="2.4" fill="white" fontWeight="bold"
+                                  style={{ pointerEvents: 'none', userSelect: 'none' }}>{players.indexOf(p) + 1}</text>
                               </g>
                             )
                           })}
@@ -218,9 +371,7 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                       )
                     })}
                   </svg>
-                ) : (
-                  <div className="h-full flex items-center justify-center"><Map className="w-8 h-8 text-slate-700" /></div>
-                )}
+                ) : <div className="h-full flex items-center justify-center"><Map className="w-8 h-8 text-slate-700" /></div>}
               </CardContent>
             </Card>
 
@@ -232,26 +383,16 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                     <span className="text-[10px] text-slate-400 font-medium">
                       📍 {locations.find((l) => l.id === currentPlayer?.locationId)?.name || '未知'}
                     </span>
-                    <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-slate-600 text-slate-400 cursor-pointer"
-                      onClick={comingSoon}>
-                      侦查 · 行动 · 追踪 ▸
-                    </Badge>
                   </div>
-                  <div className="space-y-1 max-h-24 overflow-auto">
-                    {sameLocationPlayers.length > 0 ? (
-                      sameLocationPlayers.map((p) => (
-                        <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-900/50 rounded px-1.5 py-1">
-                          <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 text-[8px] flex items-center justify-center text-white font-bold shrink-0">
-                            {players.indexOf(p) + 1}
-                          </div>
-                          <span className="truncate">{p.name}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-[10px] text-slate-600 text-center py-2">附近没有其他玩家</p>
-                    )}
+                  <div className="space-y-1 max-h-20 overflow-auto">
+                    {sameLocationPlayers.length > 0 ? sameLocationPlayers.map((p) => (
+                      <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-900/50 rounded px-1.5 py-1">
+                        <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 text-[8px] flex items-center justify-center text-white font-bold shrink-0">{players.indexOf(p) + 1}</div>
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    )) : <p className="text-[10px] text-slate-600 text-center py-2">附近没有其他玩家</p>}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={comingSoon}
+                  <Button variant="ghost" size="sm" onClick={() => info('区域聊天', '聊天功能待实现 🦊')}
                     className="w-full mt-1 h-5 text-[10px] text-slate-400 hover:text-white">
                     <MessageSquare className="w-3 h-3 mr-1" />区域聊天
                   </Button>
@@ -274,89 +415,29 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {hero && hero.skills.length > 0 ? (
-                      hero.skills.map((skill) => (
-                        <Button key={skill.id} variant="outline" size="sm"
-                          onClick={() => {
-                            if (skill.targetType === 'self') {
-                              confirm(`使用【${skill.name}】？`, () => {
-                                info('技能已使用', `${skill.name}：${skill.description}`)
-                              })
-                            } else {
-                              info(skill.name, `${skill.description}\n\n需要选择目标（待实现）`)
-                            }
-                          }}
-                          className="h-5 text-[10px] px-2 border-slate-600 text-slate-300 hover:bg-slate-700">
-                          {skill.name}
-                        </Button>
-                      ))
-                    ) : (
-                      <p className="text-[10px] text-slate-600">暂无技能</p>
-                    )}
+                    {hero && hero.skills.length > 0 ? hero.skills.map((skill) => (
+                      <Button key={skill.id} variant="outline" size="sm" onClick={() => handleSkillClick(skill)}
+                        className="h-5 text-[10px] px-2 border-slate-600 text-slate-300 hover:bg-slate-700">
+                        {skill.name}
+                      </Button>
+                    )) : <p className="text-[10px] text-slate-600">暂无技能</p>}
                   </div>
                 </CardContent>
               </Card>
             </div>
           </div>
 
-          {/* 底部操作拉取条 - 固定在底部 */}
+          {/* 底部操作条 */}
           <div className="border-t border-slate-700 bg-slate-800 shrink-0">
-            {!selectedAction ? (
-              <>
-                <Button variant="ghost" onClick={() => setActionOpen(!actionOpen)}
-                  className="w-full h-7 text-[11px] text-slate-300 hover:text-white rounded-none flex items-center justify-center gap-1">
-                  {actionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                  {actionOpen ? '收起' : '展开行动面板'}
-                </Button>
-                {actionOpen && (
-                  <div className="px-3 pb-2 space-y-1.5">
-                    <div className="grid grid-cols-4 gap-1.5">
-                      <ActionBtn icon={Footprints} label="移动" onClick={() => {
-                        if (!phase.startsWith('move')) { info('非移动阶段', '当前不是移动阶段'); return }
-                        setSelectedAction('move')
-                      }} />
-                      <ActionBtn icon={Swords} label="攻击" onClick={() => {
-                        if (currentPlayer?.identity !== 'killer') { info('权限不足', '仅杀手可以攻击'); return }
-                        if (!phase.startsWith('action')) { info('非行动阶段', '当前不是行动阶段'); return }
-                        info('敬请期待', '攻击功能开发中 🦊')
-                      }} />
-                      <ActionBtn icon={Zap} label="技能" onClick={comingSoon} />
-                      <ActionBtn icon={Eye} label="侦查" onClick={comingSoon} />
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : selectedAction === 'move' ? (
-              <div className="px-3 py-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-300 font-medium">选择目标地点</span>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedAction(null)}
-                    className="h-6 text-[10px] text-slate-400"><X className="w-3 h-3 mr-1" />取消</Button>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 max-h-32 overflow-auto">
-                  {reachable.map((loc) => (
-                    <Button key={loc.id} variant="outline" size="sm"
-                      onClick={() => handleMove(loc.id)}
-                      className="h-8 text-[10px] border-slate-600 text-slate-300 hover:border-indigo-500">
-                      {loc.name}
-                    </Button>
-                  ))}
-                </div>
-                {reachable.length === 0 && (
-                  <p className="text-[10px] text-slate-500 text-center py-2">没有可到达的地点</p>
-                )}
-              </div>
-            ) : null}
+            {renderBottomPanel()}
           </div>
         </div>
       )}
 
-      {/* 确认弹窗 */}
+      {/* 弹窗 */}
       {popup && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={() => setPopup(null)}>
-          <Card className="bg-slate-800 border-slate-700 w-full max-w-xs"
-            onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPopup(null)}>
+          <Card className="bg-slate-800 border-slate-700 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
             <CardContent className="p-5 text-center space-y-4">
               {popup.type === 'confirm' ? (
                 <>
@@ -367,23 +448,14 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                     <Button variant="outline" onClick={() => setPopup(null)}
                       className="flex-1 border-slate-600 text-slate-300 h-9 text-sm">取消</Button>
                     <Button onClick={() => { popup.onConfirm?.(); setPopup(null) }}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-sm">
-                      {popup.confirmText || '确定'}
-                    </Button>
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-sm">{popup.confirmText || '确定'}</Button>
                   </div>
-                </>
-              ) : popup.type === 'coming_soon' ? (
-                <>
-                  <Zap className="w-10 h-10 text-amber-400 mx-auto" />
-                  <h3 className="text-base font-bold text-white">{popup.title}</h3>
-                  <p className="text-sm text-slate-400">{popup.desc || '此功能正在开发中 🦊'}</p>
-                  <Button onClick={() => setPopup(null)} className="bg-indigo-600 hover:bg-indigo-700 w-full h-9 text-sm">知道了</Button>
                 </>
               ) : (
                 <>
                   <Check className="w-10 h-10 text-emerald-400 mx-auto" />
                   <h3 className="text-base font-bold text-white">{popup.title}</h3>
-                  <p className="text-sm text-slate-400">{popup.desc}</p>
+                  <p className="text-sm text-slate-400 whitespace-pre-line">{popup.desc}</p>
                   <Button onClick={() => setPopup(null)} className="bg-indigo-600 hover:bg-indigo-700 w-full h-9 text-sm">知道了</Button>
                 </>
               )}
