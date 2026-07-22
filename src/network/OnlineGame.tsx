@@ -4,20 +4,18 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Map, MessageSquare, ChevronUp, ChevronDown,
-  Footprints, Swords, Zap, Eye, ArrowLeft, Users
+  Footprints, Swords, Zap, Eye, ArrowLeft
 } from 'lucide-react'
 
 interface OnlineGameProps {
   isHost: boolean
-  roomCode: string
   onLeave: () => void
 }
 
 // ==================== 玩家游戏主界面（空壳） ====================
 
-export function OnlineGame({ isHost, roomCode, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, onLeave }: OnlineGameProps) {
   const [actionOpen, setActionOpen] = useState(false)
-  const [phase] = useState<'investigate' | 'action' | 'move' | 'vote'>('action')
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white">

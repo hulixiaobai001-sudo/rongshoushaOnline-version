@@ -114,7 +114,6 @@ export function Lobby({ onBack }: LobbyProps) {
     return (
       <OnlineGame
         isHost={mode === 'host'}
-        roomCode={roomCode}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
       />
     )
