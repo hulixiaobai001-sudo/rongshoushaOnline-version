@@ -7,6 +7,7 @@ import { GamePlay } from '@/sections/GamePlay';
 import { SettlementPhase } from '@/sections/SettlementPhase';
 import { DeathReport } from '@/sections/DeathReport';
 import { GameEnd } from '@/sections/GameEnd';
+import { LobbyHall } from '@/network/LobbyHall';
 import { Lobby } from '@/network/Lobby';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { getPhaseName } from '@/types/game';
 import { Map, Users, Play, Shuffle, Wifi, Home } from 'lucide-react';
 
-type AppMode = 'menu' | 'local' | 'online_host' | 'online_player' | 'game';
+type AppMode = 'menu' | 'local' | 'online_hall' | 'online_host' | 'online_player' | 'game';
 
 function App() {
   const { phase, players, round, resetGame } = useGameStore();
@@ -40,7 +41,7 @@ function App() {
           </Button>
 
           <Button
-            onClick={() => setAppMode('online_host')}
+            onClick={() => setAppMode('online_hall')}
             variant="secondary"
             className="w-full h-14 text-base"
           >
@@ -52,9 +53,14 @@ function App() {
     );
   }
 
-  // 联机大厅
+  // 联机大厅（房间列表）
+  if (appMode === 'online_hall') {
+    return <LobbyHall onCreateRoom={() => setAppMode('online_host')} onBack={() => setAppMode('menu')} />;
+  }
+
+  // 联机创建/加入房间
   if (appMode === 'online_host') {
-    return <Lobby onBack={() => setAppMode('menu')} />;
+    return <Lobby onBack={() => setAppMode('online_hall')} />;
   }
 
   // 本地游戏流程
