@@ -182,18 +182,38 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                     )}
                     {locations.map((loc) => {
                       const locPlayers = players.filter((p) => p.locationId === loc.id && p.status === 'alive')
+                      const isCurrentLoc = locPlayers.some((p) => p.id === currentPlayer?.id)
                       return (
                         <g key={loc.id}>
-                          <circle cx={loc.x} cy={loc.y} r={3.5}
-                            fill={locPlayers.length > 0 ? '#475569' : '#334155'}
-                            stroke={locPlayers.some((p) => p.id === currentPlayer?.id) ? '#6366f1' : '#475569'}
+                          {/* 节点圆 */}
+                          <circle cx={loc.x} cy={loc.y} r={4}
+                            fill={isCurrentLoc ? '#4f46e5' : locPlayers.length > 0 ? '#475569' : '#334155'}
+                            stroke={isCurrentLoc ? '#818cf8' : '#475569'}
                             strokeWidth="0.8" />
-                          <text x={loc.x} y={loc.y + 6} textAnchor="middle" fontSize="2.6" fill="#94a3b8"
-                            style={{ pointerEvents: 'none', userSelect: 'none' }}>{loc.name.length > 3 ? loc.name.slice(0, 3) : loc.name}</text>
-                          {locPlayers.length > 0 && (
-                            <text x={loc.x + 4.5} y={loc.y - 3.5} fontSize="2.4" fill="#818cf8"
-                              fontWeight="bold" style={{ pointerEvents: 'none' }}>{locPlayers.length}</text>
-                          )}
+                          {/* 地点名 */}
+                          <text x={loc.x} y={loc.y + 8} textAnchor="middle" fontSize="2.4" fill="#94a3b8"
+                            style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                            {loc.name.length > 4 ? loc.name.slice(0, 4) + '..' : loc.name}
+                          </text>
+                          {/* 玩家图标 */}
+                          {locPlayers.map((p, i) => {
+                            const angle = ((2 * Math.PI * i) / Math.max(locPlayers.length, 1)) - Math.PI / 2
+                            const px = loc.x + Math.cos(angle) * 6
+                            const py = loc.y + Math.sin(angle) * 6
+                            const isMe = p.id === currentPlayer?.id
+                            const pHero = p.heroId ? getHeroById(p.heroId) : null
+                            return (
+                              <g key={p.id}>
+                                <circle cx={px} cy={py} r={2.2}
+                                  fill={isMe ? '#818cf8' : pHero?.color || '#6366f1'}
+                                  stroke={isMe ? '#fff' : '#1e293b'} strokeWidth="0.4" />
+                                <text x={px} y={py + 0.8} textAnchor="middle" fontSize="2.4" fill="white"
+                                  fontWeight="bold" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                                  {players.indexOf(p) + 1}
+                                </text>
+                              </g>
+                            )
+                          })}
                         </g>
                       )
                     })}
@@ -257,7 +277,15 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
                     {hero && hero.skills.length > 0 ? (
                       hero.skills.map((skill) => (
                         <Button key={skill.id} variant="outline" size="sm"
-                          onClick={() => info(skill.name, skill.description)}
+                          onClick={() => {
+                            if (skill.targetType === 'self') {
+                              confirm(`使用【${skill.name}】？`, () => {
+                                info('技能已使用', `${skill.name}：${skill.description}`)
+                              })
+                            } else {
+                              info(skill.name, `${skill.description}\n\n需要选择目标（待实现）`)
+                            }
+                          }}
                           className="h-5 text-[10px] px-2 border-slate-600 text-slate-300 hover:bg-slate-700">
                           {skill.name}
                         </Button>
