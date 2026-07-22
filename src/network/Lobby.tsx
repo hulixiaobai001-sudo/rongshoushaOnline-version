@@ -114,6 +114,7 @@ export function Lobby({ onBack }: LobbyProps) {
     return (
       <OnlineGame
         isHost={mode === 'host'}
+        debugMode={debugMode}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
       />
     )
