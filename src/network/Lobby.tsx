@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createRoom, joinRoom, disconnect, on, broadcast, MSG, getState } from './peerjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye } from 'lucide-react'
 
 interface LobbyProps {
   onBack: () => void
@@ -17,6 +17,10 @@ export function Lobby({ onBack }: LobbyProps) {
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(false)       // 防止重复点击
+  const [showWarning, setShowWarning] = useState(true) // 首次进入提示
+  const [isSpectator, setIsSpectator] = useState(false) // 观战模式
+  const connectingRef = useRef(false)                   // 防止并发连接
 
   useEffect(() => {
     on('playerJoin', (playerId: string) => {
@@ -28,7 +32,11 @@ export function Lobby({ onBack }: LobbyProps) {
     return () => { disconnect() }
   }, [])
 
+  // ========== 创建房间（防重复点击） ==========
   const handleCreateRoom = async () => {
+    if (connectingRef.current) return
+    connectingRef.current = true
+    setLoading(true)
     setStatus('正在创建房间...')
     try {
       const room = await createRoom()
@@ -38,11 +46,17 @@ export function Lobby({ onBack }: LobbyProps) {
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
       setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
+    } finally {
+      setLoading(false)
+      connectingRef.current = false
     }
   }
 
+  // ========== 加入房间（防重复点击） ==========
   const handleJoinRoom = async () => {
-    if (!inputCode.trim()) return
+    if (!inputCode.trim() || connectingRef.current) return
+    connectingRef.current = true
+    setLoading(true)
     setStatus('正在加入房间...')
     try {
       const room = await joinRoom(inputCode.trim())
@@ -51,15 +65,21 @@ export function Lobby({ onBack }: LobbyProps) {
       setStatus('已加入房间，等待房主开始游戏...')
     } catch (e: unknown) {
       setStatus('加入失败：' + (e instanceof Error ? e.message : '未知错误'))
+    } finally {
+      setLoading(false)
+      connectingRef.current = false
     }
   }
 
+  // ========== 离开房间 ==========
   const handleLeaveRoom = () => {
     disconnect()
     setMode(null)
     setRoomCode('')
     setPlayers([])
     setStatus('')
+    connectingRef.current = false
+    setLoading(false)
   }
 
   const copyRoomCode = () => {
@@ -72,8 +92,38 @@ export function Lobby({ onBack }: LobbyProps) {
     broadcast({ type: MSG.HOST_STATE, command: 'start_game' })
   }
 
-  // 查看当前房间信息
+  // 当前房间信息
   const currentRoom = getState()
+
+  // ========== 首次警告提示 ==========
+  if (showWarning) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
+        <Card className="w-full max-w-md bg-slate-800 border-amber-700">
+          <CardContent className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-900/50 border-2 border-amber-500 flex items-center justify-center mx-auto">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h2 className="text-lg font-bold text-white">联机模式 · 开发中</h2>
+            <p className="text-sm text-slate-300">
+              截止目前，联机功能尚未开发完成，可能会出现各种 bug。
+            </p>
+            <p className="text-xs text-amber-400">
+              如果你是测试人员，请点击"确定"继续。
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={onBack} className="flex-1 border-slate-600 text-slate-300">
+                返回
+              </Button>
+              <Button onClick={() => setShowWarning(false)} className="flex-1 bg-amber-600 hover:bg-amber-700">
+                确定
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen flex flex-col bg-slate-900">
@@ -89,6 +139,7 @@ export function Lobby({ onBack }: LobbyProps) {
           <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-600">
             <Wifi className="w-3 h-3 mr-1" />
             {currentRoom.isHost ? '房主' : '玩家'}
+            {isSpectator && '（观战）'}
           </Badge>
         )}
       </header>
@@ -98,7 +149,7 @@ export function Lobby({ onBack }: LobbyProps) {
         <div className="max-w-md mx-auto space-y-4">
           {!mode ? (
             <>
-              {/* 房间信息（如果有） */}
+              {/* 已有房间时显示 */}
               {currentRoom.roomId && (
                 <Card className="bg-slate-800 border-slate-700">
                   <CardContent className="p-3 flex items-center justify-between">
@@ -120,9 +171,24 @@ export function Lobby({ onBack }: LobbyProps) {
                 <p className="text-xs text-slate-400 mt-1">通过 WiFi 进行 P2P 直连，无需服务器</p>
               </div>
 
-              <Button onClick={handleCreateRoom} className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700">
-                创建房间（房主）
+              <Button onClick={handleCreateRoom} disabled={loading}
+                className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                {loading ? '创建中...' : '创建房间（房主）'}
               </Button>
+
+              {/* 观战模式切换 */}
+              <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-3 border border-slate-700">
+                <Eye className="w-5 h-5 text-slate-400 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-slate-300">观战模式</p>
+                  <p className="text-xs text-slate-500">以观众身份加入，仅可观看无法操作</p>
+                </div>
+                <Button variant={isSpectator ? 'default' : 'outline'} size="sm"
+                  onClick={() => setIsSpectator(!isSpectator)}
+                  className={isSpectator ? 'bg-emerald-600' : 'border-slate-600 text-slate-400'}>
+                  {isSpectator ? '已开启' : '关闭'}
+                </Button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <div className="flex-1 border-t border-slate-600" />
@@ -135,7 +201,9 @@ export function Lobby({ onBack }: LobbyProps) {
                   onChange={(e) => setInputCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
                   className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 h-10" />
-                <Button onClick={handleJoinRoom} variant="secondary" className="h-10 shrink-0">加入</Button>
+                <Button onClick={handleJoinRoom} disabled={loading} variant="secondary" className="h-10 shrink-0">
+                  {loading ? '加入中...' : isSpectator ? '观战' : '加入'}
+                </Button>
               </div>
             </>
           ) : mode === 'host' ? (
@@ -145,6 +213,7 @@ export function Lobby({ onBack }: LobbyProps) {
                 <CardContent className="p-4 text-center">
                   <p className="text-xs text-slate-400 mb-1">房间码</p>
                   <p className="text-3xl font-bold text-white tracking-widest font-mono">{roomCode}</p>
+                  <p className="text-xs text-slate-500 mt-1">端口：{roomCode.slice(-4)}</p>
                   <div className="flex justify-center gap-2 mt-2">
                     <Button variant="ghost" size="sm" onClick={copyRoomCode}
                       className="text-emerald-400 hover:text-emerald-300 h-7 text-xs">
@@ -222,13 +291,5 @@ export function Lobby({ onBack }: LobbyProps) {
         </div>
       </main>
     </div>
-  )
-}
-
-function Play({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
   )
 }
