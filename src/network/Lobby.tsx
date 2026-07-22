@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye } from 'lucide-react'
+import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye, Bug } from 'lucide-react'
+import { OnlineGame } from './OnlineGame'
 
 interface LobbyProps {
   onBack: () => void
 }
+
+const DEBUG_PHRASE = '柯基不爱喝茶'
 
 export function Lobby({ onBack }: LobbyProps) {
   const [mode, setMode] = useState<'host' | 'join' | null>(null)
@@ -17,10 +20,13 @@ export function Lobby({ onBack }: LobbyProps) {
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
-  const [loading, setLoading] = useState(false)       // 防止重复点击
-  const [showWarning, setShowWarning] = useState(true) // 首次进入提示
-  const [isSpectator, setIsSpectator] = useState(false) // 观战模式
-  const connectingRef = useRef(false)                   // 防止并发连接
+  const [loading, setLoading] = useState(false)
+  const [showWarning, setShowWarning] = useState(true)
+  const [isSpectator, setIsSpectator] = useState(false)
+  const [debugMode, setDebugMode] = useState(false)
+  const [debugInput, setDebugInput] = useState('')
+  const [inGame, setInGame] = useState(false)
+  const connectingRef = useRef(false)
 
   useEffect(() => {
     on('playerJoin', (playerId: string) => {
@@ -32,7 +38,6 @@ export function Lobby({ onBack }: LobbyProps) {
     return () => { disconnect() }
   }, [])
 
-  // ========== 创建房间（防重复点击） ==========
   const handleCreateRoom = async () => {
     if (connectingRef.current) return
     connectingRef.current = true
@@ -52,7 +57,6 @@ export function Lobby({ onBack }: LobbyProps) {
     }
   }
 
-  // ========== 加入房间（防重复点击） ==========
   const handleJoinRoom = async () => {
     if (!inputCode.trim() || connectingRef.current) return
     connectingRef.current = true
@@ -71,13 +75,14 @@ export function Lobby({ onBack }: LobbyProps) {
     }
   }
 
-  // ========== 离开房间 ==========
   const handleLeaveRoom = () => {
     disconnect()
     setMode(null)
     setRoomCode('')
     setPlayers([])
     setStatus('')
+    setDebugMode(false)
+    setInGame(false)
     connectingRef.current = false
     setLoading(false)
   }
@@ -88,12 +93,32 @@ export function Lobby({ onBack }: LobbyProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleStartGame = () => {
-    broadcast({ type: MSG.HOST_STATE, command: 'start_game' })
+  // 调试模式：用空壳玩家填充
+  const enterDebugMode = () => {
+    const botCount = 7 // 总共8人（房主+7 bot）
+    const botPlayers = Array.from({ length: botCount }, (_, i) => `bot_${i + 1}`)
+    setPlayers([players[0], ...botPlayers])
+    setDebugMode(true)
+    setStatus('调试模式已启动，已填充空壳玩家')
   }
 
-  // 当前房间信息
+  const handleStartGame = () => {
+    broadcast({ type: MSG.HOST_STATE, command: 'start_game' })
+    setInGame(true)
+  }
+
   const currentRoom = getState()
+
+  // 如果在游戏中
+  if (inGame) {
+    return (
+      <OnlineGame
+        isHost={mode === 'host'}
+        roomCode={roomCode}
+        onLeave={() => { setInGame(false); handleLeaveRoom() }}
+      />
+    )
+  }
 
   // ========== 首次警告提示 ==========
   if (showWarning) {
@@ -112,12 +137,8 @@ export function Lobby({ onBack }: LobbyProps) {
               如果你是测试人员，请点击"确定"继续。
             </p>
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={onBack} className="flex-1 border-slate-600 text-slate-300">
-                返回
-              </Button>
-              <Button onClick={() => setShowWarning(false)} className="flex-1 bg-amber-600 hover:bg-amber-700">
-                确定
-              </Button>
+              <Button variant="outline" onClick={onBack} className="flex-1 border-slate-600 text-slate-300">返回</Button>
+              <Button onClick={() => setShowWarning(false)} className="flex-1 bg-amber-600 hover:bg-amber-700">确定</Button>
             </div>
           </CardContent>
         </Card>
@@ -127,7 +148,6 @@ export function Lobby({ onBack }: LobbyProps) {
 
   return (
     <div className="h-screen flex flex-col bg-slate-900">
-      {/* 顶部导航 */}
       <header className="px-3 md:px-4 py-3 border-b border-slate-700 flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={mode ? handleLeaveRoom : onBack}
           className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-800">
@@ -135,21 +155,19 @@ export function Lobby({ onBack }: LobbyProps) {
           {mode ? '退出房间' : '返回'}
         </Button>
         <div className="flex-1" />
+        {debugMode && <Badge className="text-[10px] bg-amber-600">调试模式</Badge>}
         {currentRoom.roomId && (
           <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-600">
             <Wifi className="w-3 h-3 mr-1" />
-            {currentRoom.isHost ? '房主' : '玩家'}
-            {isSpectator && '（观战）'}
+            {currentRoom.isHost ? '房主' : '玩家'}{isSpectator && '（观战）'}
           </Badge>
         )}
       </header>
 
-      {/* 主内容 */}
       <main className="flex-1 overflow-auto p-3 md:p-4">
         <div className="max-w-md mx-auto space-y-4">
           {!mode ? (
             <>
-              {/* 已有房间时显示 */}
               {currentRoom.roomId && (
                 <Card className="bg-slate-800 border-slate-700">
                   <CardContent className="p-3 flex items-center justify-between">
@@ -176,7 +194,6 @@ export function Lobby({ onBack }: LobbyProps) {
                 {loading ? '创建中...' : '创建房间（房主）'}
               </Button>
 
-              {/* 观战模式切换 */}
               <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-3 border border-slate-700">
                 <Eye className="w-5 h-5 text-slate-400 shrink-0" />
                 <div className="flex-1">
@@ -205,15 +222,30 @@ export function Lobby({ onBack }: LobbyProps) {
                   {loading ? '加入中...' : isSpectator ? '观战' : '加入'}
                 </Button>
               </div>
+
+              {/* 调试模式开关 - 口令 */}
+              {!debugMode ? (
+                <div className="pt-2">
+                  <Input placeholder="输入调试口令..." value={debugInput}
+                    onChange={(e) => {
+                      setDebugInput(e.target.value)
+                      if (e.target.value === DEBUG_PHRASE) {
+                        setDebugMode(true)
+                        setStatus('调试模式已解锁')
+                      }
+                    }}
+                    className="text-xs bg-transparent border-0 text-slate-600 placeholder:text-slate-700 h-6 px-0" />
+                </div>
+              ) : (
+                <p className="text-[10px] text-amber-600/50 text-center">调试模式已激活</p>
+              )}
             </>
           ) : mode === 'host' ? (
             <>
-              {/* 房主界面 */}
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-4 text-center">
                   <p className="text-xs text-slate-400 mb-1">房间码</p>
                   <p className="text-3xl font-bold text-white tracking-widest font-mono">{roomCode}</p>
-                  <p className="text-xs text-slate-500 mt-1">端口：{roomCode.slice(-4)}</p>
                   <div className="flex justify-center gap-2 mt-2">
                     <Button variant="ghost" size="sm" onClick={copyRoomCode}
                       className="text-emerald-400 hover:text-emerald-300 h-7 text-xs">
@@ -242,14 +274,16 @@ export function Lobby({ onBack }: LobbyProps) {
                   ) : (
                     <div className="space-y-1">
                       {players.map((id, i) => (
-                        <div key={id} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-900/50 rounded px-2 py-1.5">
-                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">
-                            {i + 1}
-                          </span>
+                        <div key={id}
+                          className={`flex items-center gap-2 text-sm rounded px-2 py-1.5 ${
+                            id.startsWith('bot_') ? 'bg-slate-900/30 text-slate-500' : 'bg-slate-900/50 text-slate-300'
+                          }`}>
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
                           <span className={i === 0 ? 'font-medium text-amber-400' : ''}>
-                            {i === 0 ? '房主' : `玩家 ${i}`}
+                            {i === 0 ? '房主' : id.startsWith('bot_') ? `空壳${id.slice(-1)}` : `玩家 ${i}`}
                           </span>
-                          <span className="text-[10px] text-slate-600 font-mono ml-auto">{id.slice(-4)}</span>
+                          {id.startsWith('bot_') && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
+                          {!id.startsWith('bot_') && i > 0 && <span className="text-[10px] text-slate-600 font-mono ml-auto">{id.slice(-4)}</span>}
                         </div>
                       ))}
                     </div>
@@ -257,19 +291,30 @@ export function Lobby({ onBack }: LobbyProps) {
                 </CardContent>
               </Card>
 
+              {/* 调试模式按钮 */}
+              {debugMode && !players.some(p => p.startsWith('bot_')) && (
+                <Button onClick={enterDebugMode} variant="outline"
+                  className="w-full h-10 text-sm border-amber-600 text-amber-400 hover:bg-amber-950">
+                  <Bug className="w-4 h-4 mr-2" />调试模式：填充空壳玩家
+                </Button>
+              )}
+
+              {/* 开始游戏 */}
               <Button onClick={handleStartGame} disabled={players.length < 4}
                 className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
-                <Play className="w-5 h-5 mr-2" />开始游戏（{players.length}/4人）
+                <Play className="w-5 h-5 mr-2" />{debugMode ? '进入调试' : `开始游戏（${players.length}/4人）`}
               </Button>
-              {players.length < 4 && (
+              {players.length < 4 && !debugMode && (
                 <p className="text-xs text-slate-400 text-center">至少需要4人才能开始</p>
+              )}
+              {debugMode && players.length < 4 && (
+                <p className="text-xs text-amber-500 text-center">点击「填充空壳玩家」补满人数</p>
               )}
 
               {status && <p className="text-xs text-slate-400 text-center">{status}</p>}
             </>
           ) : (
             <>
-              {/* 玩家界面 */}
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-4 text-center">
                   <p className="text-xs text-slate-400 mb-1">已加入房间</p>
@@ -280,7 +325,6 @@ export function Lobby({ onBack }: LobbyProps) {
                   </Button>
                 </CardContent>
               </Card>
-
               <div className="text-center py-8">
                 <RefreshCw className="w-8 h-8 text-emerald-500 mx-auto animate-spin mb-3" />
                 <p className="text-sm text-slate-400">等待房主开始游戏...</p>
