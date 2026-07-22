@@ -13,14 +13,15 @@ const LOADING_STEPS = [
 
 interface LoadingScreenProps {
   debugMode: boolean
+  botNames?: string[]
   onComplete: () => void
 }
 
-export function LoadingScreen({ debugMode, onComplete }: LoadingScreenProps) {
+export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreenProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
-  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame } = useGameStore()
+  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame, addPlayer } = useGameStore()
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +30,14 @@ export function LoadingScreen({ debugMode, onComplete }: LoadingScreenProps) {
       // 重置游戏状态
       resetGame()
       addLog('初始化游戏引擎...')
+
+      // 填充调试空壳玩家
+      if (botNames && botNames.length > 0) {
+        botNames.forEach((name) => {
+          addPlayer(name)
+          addLog(`添加玩家: ${name}`)
+        })
+      }
 
       // 步骤1：分配身份
       setCurrentStep(0)

@@ -26,6 +26,7 @@ export function Lobby({ onBack }: LobbyProps) {
   const [debugMode, setDebugMode] = useState(false)
   const [debugInput, setDebugInput] = useState('')
   const [inGame, setInGame] = useState(false)
+  const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
   const connectingRef = useRef(false)
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export function Lobby({ onBack }: LobbyProps) {
     setStatus('')
     setDebugMode(false)
     setInGame(false)
+    setBotPlayerNames([])
     connectingRef.current = false
     setLoading(false)
   }
@@ -95,9 +97,11 @@ export function Lobby({ onBack }: LobbyProps) {
 
   // 调试模式：用空壳玩家填充
   const enterDebugMode = () => {
-    const botCount = 7 // 总共8人（房主+7 bot）
-    const botPlayers = Array.from({ length: botCount }, (_, i) => `bot_${i + 1}`)
-    setPlayers([players[0], ...botPlayers])
+    const botCount = 7
+    const botIds = Array.from({ length: botCount }, (_, i) => `bot_${i + 1}`)
+    const botNames = Array.from({ length: botCount }, (_, i) => `空壳玩家${i + 1}`)
+    setPlayers([players[0], ...botIds])
+    setBotPlayerNames(botNames)
     setDebugMode(true)
     setStatus('调试模式已启动，已填充空壳玩家')
   }
@@ -115,6 +119,7 @@ export function Lobby({ onBack }: LobbyProps) {
       <OnlineGame
         isHost={mode === 'host'}
         debugMode={debugMode}
+        botNames={botPlayerNames}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
       />
     )

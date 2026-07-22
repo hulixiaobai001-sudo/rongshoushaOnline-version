@@ -14,10 +14,11 @@ import { LoadingScreen } from './LoadingScreen'
 interface OnlineGameProps {
   isHost: boolean
   debugMode: boolean
+  botNames?: string[]
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, debugMode, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameProps) {
   const [loading, setLoading] = useState(true)
   const [actionOpen, setActionOpen] = useState(false)
   const [ready, setReady] = useState(false)
@@ -52,7 +53,7 @@ export function OnlineGame({ isHost, debugMode, onLeave }: OnlineGameProps) {
 
   // 加载完成
   if (loading) {
-    return <LoadingScreen debugMode={debugMode} onComplete={() => setLoading(false)} />
+    return <LoadingScreen debugMode={debugMode} botNames={botNames} onComplete={() => setLoading(false)} />
   }
 
   // 本地用主持人模式时直接用真人玩家
