@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { HeroSkill } from '@/types/hero'
 import {
-  Settings, BookOpen, Footprints, Zap,
+  Settings, BookOpen, Footprints, Zap, Swords,
   MapPin,
   Check, X, AlertCircle, ChevronUp, ChevronDown,
   Skull, Heart,
