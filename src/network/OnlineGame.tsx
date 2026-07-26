@@ -275,6 +275,11 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
     const playerId = currentPlayer?.id || ''
     const skillName = skill.name
 
+    // 标记技能已使用
+    if (skill.limit === 'once_per_game') {
+      store.markSkillUsed(playerId, skill.id)
+    }
+
     // 执行技能效果
     switch (skill.id) {
       // ── 年糕：功夫 ──

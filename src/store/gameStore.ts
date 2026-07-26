@@ -127,6 +127,7 @@ interface GameStore extends GameState {
   
   // 每轮重置技能使用计数（once_per_round 技能）
   incrementRoundSkillUsage: (skillId: string) => void;
+  markSkillUsed: (playerId: string, skillId: string) => void;
   setDrone: (playerId: string, locationId: string) => void;
   decrementRoundSkillUsage: (skillId: string) => void;
   
@@ -307,6 +308,12 @@ export const useGameStore = create<GameStore>()(
       }),
 
     // 每轮重置技能使用计数（once_per_round 技能）
+    markSkillUsed: (playerId, skillId) =>
+      set((state) => {
+        if (!state.usedSkills[playerId]) state.usedSkills[playerId] = [];
+        if (!state.usedSkills[playerId].includes(skillId)) state.usedSkills[playerId].push(skillId);
+      }),
+
     incrementRoundSkillUsage: (skillId) =>
       set((state) => {
         state.roundSkillUsage[skillId] = (state.roundSkillUsage[skillId] || 0) + 1;
@@ -571,6 +578,7 @@ export const useGameStore = create<GameStore>()(
       }),
 
     /** 记录一次攻击（行动阶段使用，不立即处理死亡，结算阶段统一结算） */
+    /** 立即击杀（技能直接生效，无结算阶段） */
     killPlayer: (targetId, attackerId) =>
       set((state) => {
         if (!attackerId) return;
@@ -578,22 +586,35 @@ export const useGameStore = create<GameStore>()(
         const attacker = state.players.find((p) => p.id === attackerId);
         if (!target || !attacker || target.status !== 'alive' || attacker.status !== 'alive') return;
 
-        // 只记录攻击，不立即处理
-        state.pendingAttacks.push({
-          attackerId,
-          targetId,
-          actionPhase: String(state.phase),
-        });
+        // 检查目标是否有功夫 → 反弹！
+        if (state.kungFuActivePlayers.includes(targetId)) {
+          attacker.status = 'dead';
+          attacker.isRevealed = true;
+          const aLoc = state.locations.find((l) => l.id === attacker.locationId);
+          state.events.push({
+            id: generateId('evt'), round: state.round, phase: state.phase,
+            timestamp: Date.now(), type: 'death',
+            playerId: attacker.id,
+            description: `【功夫反弹】${target.name} 反杀了 ${attacker.name}！（${aLoc ? aLoc.name : ''}）`,
+          });
+          // 检查胜利条件
+          checkGameEnd(state);
+          return;
+        }
 
-        const targetLoc = state.locations.find((l) => l.id === target.locationId);
-        const hasKungFu = state.kungFuActivePlayers.includes(targetId);
+        // 普通击杀
+        target.status = 'dead';
+        target.isRevealed = true;
+        const tLoc = state.locations.find((l) => l.id === target.locationId);
         state.events.push({
           id: generateId('evt'), round: state.round, phase: state.phase,
-          timestamp: Date.now(), type: 'attack',
-          playerId: attackerId, targetId,
-          locationId: target.locationId,
-          description: `${attacker.name} → ${target.name}（${targetLoc ? targetLoc.name : ''}）${hasKungFu ? '【功夫反弹待发】' : ''}`,
+          timestamp: Date.now(), type: 'death',
+          playerId: target.id,
+          description: `${target.name}（${target.identity === 'killer' ? '杀手' : '平民'}）在${tLoc ? tLoc.name : ''}被 ${attacker.name} 击杀`,
         });
+
+        // 检查胜利条件
+        checkGameEnd(state);
       }),
 
     /** 结算阶段：濒死→死亡 */
@@ -998,6 +1019,34 @@ function handleDeathReport(state: GameState) {
     timestamp: Date.now(), type: 'phase_change',
     description: `死亡播报结束，进入${getPhaseName(next)}`,
   });
+}
+
+/** 屠城胜利判定 */
+function checkGameEnd(state: GameState) {
+  const aliveKillers = state.players.filter((p) => p.status === 'alive' && p.identity === 'killer').length;
+  const aliveCivilians = state.players.filter((p) => p.status === 'alive' && p.identity === 'civilian').length;
+
+  if (aliveKillers === 0) {
+    state.winner = 'good';
+    state.phase = 'end';
+    state.events.push({
+      id: generateId('evt'), round: state.round, phase: 'end',
+      timestamp: Date.now(), type: 'win',
+      description: '🏆 好人阵营胜利！所有杀手已被消灭',
+    });
+    return;
+  }
+
+  if (aliveCivilians === 0) {
+    state.winner = 'evil';
+    state.phase = 'end';
+    state.events.push({
+      id: generateId('evt'), round: state.round, phase: 'end',
+      timestamp: Date.now(), type: 'win',
+      description: '🏆 杀手阵营胜利！屠城成功',
+    });
+    return;
+  }
 }
 
 function getPhaseName(phase: GamePhase): string {
