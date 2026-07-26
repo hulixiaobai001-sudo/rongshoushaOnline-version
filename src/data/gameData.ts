@@ -65,6 +65,18 @@ export function getReachableLocations(
   const queue: [string, number][] = [[from, 0]];
   const visited = new Set<string>([from]);
 
+  // 志成桥效果：extraDestinations 作为单向可达
+  const fromLoc = locMap.get(from);
+  if (fromLoc?.effect?.type === 'bridge_jump' && fromLoc.effect.extraDestinations) {
+    fromLoc.effect.extraDestinations.forEach((name) => {
+      const target = locations.find(l => l.name === name);
+      if (target && !visited.has(target.id)) {
+        visited.add(target.id);
+        result.push({ id: target.id, name: target.name, steps: 1 });
+      }
+    });
+  }
+
   while (queue.length > 0) {
     const [current, dist] = queue.shift()!;
     if (dist > 0 && dist <= maxSteps) {
