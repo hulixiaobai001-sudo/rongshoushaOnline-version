@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { LobbyHall } from '@/network/LobbyHall';
 import { Lobby } from '@/network/Lobby';
 import { Button } from '@/components/ui/button';
-import { Wifi, Gamepad2 } from 'lucide-react';
+import { Wifi } from 'lucide-react';
 
 type AppMode = 'menu' | 'online_hall' | 'online_host' | 'online_player';
 

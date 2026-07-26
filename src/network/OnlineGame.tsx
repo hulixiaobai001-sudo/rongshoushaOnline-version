@@ -62,7 +62,7 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameProps) {
+export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
@@ -87,9 +87,6 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
   const phaseLabel = PHASE_LABEL[phase] || phase
   const day = PHASE_DAY_MAP[phase] ?? null
   const isMovePhase = phase.startsWith('move')
-  const isActionPhase = phase.startsWith('action')
-  const isVotePhase = phase === 'vote'
-  const isSettlementPhase = phase.startsWith('settlement')
   const isGameOver = phase === 'end'
 
   // 存活/死亡
@@ -376,9 +373,6 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
     const notUsed = s.limit === 'unlimited' || s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)
     return phaseOk && notUsed
   }) || []
-
-  // 移动阶段技能（单独在左下角展示）
-  const moveSkills = availableSkills.filter(s => MOVE_SKILL_IDS.includes(s.id))
 
   // 判断是否为选目标模式
   const isTargetingMode = interaction === 'skill_target' && selectedSkill
@@ -678,7 +672,7 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
 
       {/* ═══ 弹窗 ═══ */}
       {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
-        players={players} locations={locations} currentPhase={phase} />}
+        players={players} currentPhase={phase} />}
     </div>
   )
 }
@@ -687,12 +681,11 @@ export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameP
 //  弹窗覆盖层
 // ═══════════════════════════════════════════════════
 function PopupOverlay({
-  popup, onClose, players, locations, currentPhase
+  popup, onClose, players, currentPhase
 }: {
   popup: PopupState
   onClose: () => void
   players: any[]
-  locations: any[]
   currentPhase: string
 }) {
   if (popup.type === 'settings') {
