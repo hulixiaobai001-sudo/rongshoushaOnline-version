@@ -67,7 +67,7 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const {
     phase, round, players, locations,
     movePlayer, nextPhase,
-    activateKungFu, activateTeleport, activateDoubleMove, applyHalt,
+    activateKungFu, activateTeleport, activateDoubleMove, applyHalt, roundSkillUsage,
     usedSkills,
   } = store
 
@@ -308,6 +308,14 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
 
     // 执行技能效果
     switch (skill.id) {
+      // 普通攻击（杀手通用）
+      case 'basic_kill':
+        if (targetPlayerId) {
+          store.killPlayer(targetPlayerId, playerId)
+          const target = players.find(p => p.id === targetPlayerId)
+          info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
+        }
+        break
       // ═══════════════════════════════════════════
       // 年糕 —— 功夫熊猫：功夫
       // ═══════════════════════════════════════════
@@ -485,7 +493,8 @@ ${skill.description}`)
     const phaseOk = s.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote') || p === phase)
     // 检查次数
     const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
-    const notUsed = s.limit === 'unlimited' || s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)
+    const roundUsed = s.limit === 'once_per_round' && roundSkillUsage[s.id] && roundSkillUsage[s.id] >= 1
+    const notUsed = s.limit === 'unlimited' || (!roundUsed && (s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)))
     return phaseOk && notUsed
   }) : []
 
@@ -891,6 +900,19 @@ ${skill.description}`)
               </div>
             )}
           </div>
+
+          {/* 中：攻击按钮（杀手专用） */}
+          {currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
+            <button onClick={() => {
+              if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
+              setSelectedSkill({ id: 'basic_kill', name: '攻击', description: '', type: 'active', targetType: 'same_location_player', limit: 'unlimited', usedCount: 0, maxUses: 99, usablePhase: [] } as any)
+              setInteraction('skill_target')
+            }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-medium transition-colors shrink-0">
+              <Swords className="w-3.5 h-3.5" />
+              刀人
+            </button>
+          )}
 
           {/* 中：移动按钮 */}
           {isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (

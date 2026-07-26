@@ -391,7 +391,9 @@ export const useGameStore = create<GameStore>()(
         const totalPlayers = state.players.length;
         if (totalPlayers === 0) return;
         // 动态计算杀手数量：每4人1杀手，至少1个，最多不超过总人数1/3
-        const dynamicKillers = Math.max(1, Math.min(Math.floor(totalPlayers / 4), Math.floor(totalPlayers / 3)));
+        // 50%概率杀手，最少1人最多不超过半数
+        const maxK = Math.floor(totalPlayers / 2);
+        const dynamicKillers = Math.max(1, Math.min(Math.floor(totalPlayers / 2), maxK));
         const dynamicCivilians = totalPlayers - dynamicKillers;
         const identities: Identity[] = [];
         for (let i = 0; i < dynamicKillers; i++) identities.push('killer');
