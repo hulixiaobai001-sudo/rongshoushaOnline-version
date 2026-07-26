@@ -1108,10 +1108,9 @@ function PlayerActionCard({
                     {record.phase === 'move1' ? '移动②'
                       : record.phase === 'move2' ? '移动③'
                       : record.phase === 'move4' ? '移动④'
-                      : record.phase === 'investigate4' ? '探查④'
                       : record.phase === 'action4' ? '行动④'
-                      : record.phase === 'settlement4' ? '结算④'
-                      : record.phase.replace('investigate', '探查').replace('action', '行动').replace('settlement', '结算')}
+                      : record.phase === 'death_report' ? '死亡播报'
+                      : record.phase}
                   </span>
                   <span className="text-slate-700">{record.action}</span>
                   {record.locationId && (
