@@ -15,7 +15,7 @@ import {
   Skull, Heart,
   Navigation, Sparkles
 } from 'lucide-react'
-import { LoadingScreen } from './LoadingScreen'
+// LoadingScreen 已废弃，改用 store.quickStartGame 一键初始化
 
 // ─── 弹窗类型 ────────────────────────────────────
 type PopupType = 'confirm' | 'info' | 'settings' | 'rules'
@@ -58,16 +58,16 @@ const MOVE_SKILL_IDS = ['zhuxun_double_move', 'fengming_teleport']
 // ═══════════════════════════════════════════════════
 interface OnlineGameProps {
   isHost: boolean
-  debugMode: boolean
+  debugMode?: boolean
   botNames?: string[]
   onLeave: () => void
 }
 
-export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
+export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
-    movePlayer, nextPhase,
+    movePlayer, nextPhase, quickStartGame,
     activateKungFu, activateTeleport, activateDoubleMove, applyHalt,
     usedSkills,
   } = store
@@ -79,6 +79,17 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const [selectedSkill, setSelectedSkill] = useState<HeroSkill | null>(null)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
+
+  // ── 初始化：组件挂载时一键同步初始化 ──
+  useEffect(() => {
+    // 用空壳玩家填充（线上模式改为连接的玩家列表）
+    const names = botNames && botNames.length > 0 ? botNames
+      : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+    quickStartGame(names)
+    // 1.5秒后关闭加载画面
+    const t = setTimeout(() => setLoading(false), 1500)
+    return () => clearTimeout(t)
+  }, [])
 
   // 当前玩家（开发阶段固定为 players[0]）
   const currentPlayer = players[0]
@@ -104,13 +115,6 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const reachableLocations = currentPlayer
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
-
-  // ── 加载完成（无论什么模式，最多等3秒） ──
-  useEffect(() => {
-    if (!loading) return
-    const t = setTimeout(() => setLoading(false), 3000)
-    return () => clearTimeout(t)
-  }, [loading])
 
   // ── 点击的地点信息 ──
   const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
@@ -355,9 +359,20 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
     }, '确认')
   }
 
-  // ── 加载中 ──
+  // ── 加载中（1.5秒等待，纯展示用） ──
   if (loading) {
-    return <LoadingScreen debugMode={debugMode} botNames={botNames} onComplete={() => setLoading(false)} />
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div className="text-center space-y-4">
+          <div className="text-5xl mb-3 animate-pulse">🦊</div>
+          <h2 className="text-lg font-bold text-white">准备中</h2>
+          <div className="w-48 h-1.5 bg-slate-700 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-indigo-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+          <p className="text-xs text-slate-500">游戏即将开始...</p>
+        </div>
+      </div>
+    )
   }
 
   // ═══════════════════════════════════════════════════
