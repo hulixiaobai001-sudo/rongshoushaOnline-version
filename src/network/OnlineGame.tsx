@@ -558,7 +558,7 @@ ${skill.description}`)
       </header>
 
       {/* ═══ 主内容区域 ═══ */}
-      <main className="flex-[3] flex flex-col min-h-0">
+      <main className="flex-[2] flex flex-col min-h-0">
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
@@ -756,6 +756,17 @@ ${skill.description}`)
           <div className="flex gap-0">
             {/* 左栏：状态+地点信息+同地点玩家+尸体 */}
             <div className="flex-1 px-3 py-1.5 min-w-0 border-r border-slate-700/50">
+              {/* 凌宇神社神视按钮 */}
+              {currentPlayer && infoLocation?.effect?.type === 'shrine_vision' && infoLocation.id === currentPlayer.locationId && (
+                <button onClick={() => {
+                  const visits = store.locationVisits?.[infoLocation.id] || []
+                  const names = visits.map((id: string) => players.find((p: any) => p.id === id)).filter(Boolean).map((p: any) => p.name)
+                  info('🏛️ 凌宇神社 · 神视', names.length > 0 ? '本轮经过此地的玩家：' + names.join('、') : '本轮无人经过此地')
+                }}
+                  className="w-full text-left text-[9px] px-2 py-1 rounded mb-1.5 bg-purple-900/40 text-purple-400 border border-purple-800/50 hover:bg-purple-800/50 transition-colors">
+                  🏛️ 神视 - 查看经过记录
+                </button>
+              )}
               {/* 状态效果显示 */}
               {currentPlayer && (
                 <div className="flex flex-wrap gap-1 mb-1.5">
@@ -984,7 +995,7 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
   const droneLoc = locations?.find((l: any) => l.id === droneLocationId)
 
   return (
-    <div className="space-y-1 max-h-[80px] overflow-auto">
+    <div className="space-y-1 max-h-[100px] overflow-auto">
       {/* 追踪信息 */}
       {trackedPlayer && trackRecords && trackRecords.length > 0 && (
         <div>

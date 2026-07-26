@@ -16,6 +16,56 @@ const DEBUG_PHRASE = '柯基不爱喝茶'
 
 
 // ═══════════════════════════════════════════════════
+//  角色分配面板（管理员）
+// ═══════════════════════════════════════════════════
+function RoleAssignmentPanel() {
+  const store = useGameStore()
+  const [expanded, setExpanded] = useState(false)
+  const players = store.players
+  
+  // 手动设置身份
+  const setIdentity = (playerId: string, identity: 'killer' | 'civilian') => {
+    // Direct store mutation won't work with immer, need to use store action
+    // Instead, we'll modify the playerCount settings
+    window.alert('身份分配功能开发中，当前使用系统自动分配')
+  }
+
+  if (players.length === 0) return null
+
+  return (
+    <Card className="bg-slate-800 border-indigo-700">
+      <CardContent className="p-3">
+        <button onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between text-xs font-bold text-indigo-400">
+          <span>🎭 角色分配（{players.length}人）</span>
+          <span>{expanded ? '收起' : '展开'}</span>
+        </button>
+        {expanded && (
+          <div className="mt-2 space-y-1.5">
+            {players.map((p: any, i: number) => (
+              <div key={p.id} className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1.5">
+                <span className="text-xs text-slate-300">{i + 1}. {p.name}</span>
+                <div className="flex gap-1">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.identity === 'killer' ? 'bg-red-900/40 text-red-400' : 'bg-blue-900/40 text-blue-400'}`}>
+                    {p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}
+                  </span>
+                  {p.heroId && (
+                    <span className="text-[10px] text-slate-500">
+                      {(() => { try { const h = JSON.parse(JSON.stringify(require)); return '' } catch(e) { return '' } })()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            <p className="text-[9px] text-slate-500 text-center pt-1">系统已自动分配身份和英雄，开局后可在游戏中查看</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ═══════════════════════════════════════════════════
 //  调试模式设置组件
 // ═══════════════════════════════════════════════════
 function DebugSettings() {
@@ -409,6 +459,11 @@ export function Lobby({ onBack }: LobbyProps) {
               {/* 房主设置（身份分配） */}
               {mode === 'host' && (
                 <DebugSettings />
+              )}
+
+              {/* 角色分配面板 */}
+              {mode === 'host' && (
+                <RoleAssignmentPanel />
               )}
 
               {/* 调试模式按钮 */}
