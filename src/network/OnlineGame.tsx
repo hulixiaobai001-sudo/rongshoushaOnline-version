@@ -430,12 +430,12 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 
         {/* 玩家信息 */}
         {currentPlayer && hero && (
-          <div className=\"flex items-center gap-1.5 shrink-0\">
-            <div className=\"hidden sm:block text-[10px] leading-tight text-right\">
-              <p className=\"text-white font-medium\">{hero.name} · {hero.title}</p>
-              <p className=\"text-slate-400\">{currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="hidden sm:block text-[10px] leading-tight text-right">
+              <p className="text-white font-medium">{hero.name} · {hero.title}</p>
+              <p className="text-slate-400">{currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
             </div>
-            <div className=\"sm:hidden text-[10px] text-white font-medium\">{hero.name}</div>
+            <div className="sm:hidden text-[10px] text-white font-medium">{hero.name}</div>
           </div>
         )}
 
