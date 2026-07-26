@@ -62,7 +62,7 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
+export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
