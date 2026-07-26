@@ -90,7 +90,6 @@ interface GameStore extends GameState {
   randomPlaceAll: () => void;
   nextPhase: () => void;
   resetGame: () => void;
-  quickStartGame: (playerNames: string[]) => void;  // 一键初始化
 
   // 英雄系统
   toggleHeroPool: () => void;
@@ -798,74 +797,6 @@ export const useGameStore = create<GameStore>()(
     addEvent: (event) =>
       set((state) => {
         state.events.push({ ...event, id: generateId('evt'), timestamp: Date.now() });
-      }),
-
-    // 一键初始化：重置+加人+分身份+地图+英雄+放置+进入action1
-    quickStartGame: (playerNames) =>
-      set((state) => {
-        // 重置
-        const tempLocs = state.tempLocations;
-        const heroEnabled = state.heroPoolEnabled;
-        const heroIds = state.selectedHeroIds;
-        Object.assign(state, initialState);
-        state.tempLocations = tempLocs;
-        state.heroPoolEnabled = heroEnabled;
-        state.selectedHeroIds = heroIds;
-        state.players = [];
-        // 加人
-        playerNames.forEach((name) => {
-          state.players.push({
-            id: `p_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-            name, identity: 'civilian', status: 'alive',
-            locationId: '', isRevealed: false,
-            votedFor: null, voteCount: 0,
-            heroId: '', halted: false,
-            teleportReady: false, doubleMoveActive: false, doubleMoveFirstDone: false,
-            normalAttackRemaining: 1, asylumAttackRemaining: 1,
-          });
-        });
-        // 分身份
-        const total = state.players.length;
-        const ids: Identity[] = [];
-        for (let i = 0; i < state.killerCount; i++) ids.push('killer');
-        for (let i = 0; i < state.civilianCount; i++) ids.push('civilian');
-        while (ids.length < total) ids.push('civilian');
-        while (ids.length > total) { const idx = ids.lastIndexOf('civilian'); if (idx !== -1) ids.splice(idx, 1); else ids.pop(); }
-        for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-        state.players.forEach((p, i) => { p.identity = ids[i]; });
-        // 地图
-        const locs = [
-          { id: 'loc_zhongxin', name: '中心公园', connectedTo: ['loc_yidui', 'loc_shangye', 'loc_asam'], isBlocked: false, x: 50, y: 35 },
-          { id: 'loc_yidui', name: '一大队', connectedTo: ['loc_zhongxin', 'loc_nancuiping', 'loc_jikong'], isBlocked: false, x: 75, y: 35 },
-          { id: 'loc_shangye', name: '商业街', connectedTo: ['loc_zhongxin', 'loc_asam'], isBlocked: false, x: 25, y: 30 },
-          { id: 'loc_asam', name: '阿萨姆疯人院', connectedTo: ['loc_shangye', 'loc_zhongxin'], isBlocked: false, x: 50, y: 12 },
-          { id: 'loc_nancuiping', name: '南翠屏公园', connectedTo: ['loc_lingyu', 'loc_yidui'], isBlocked: false, x: 80, y: 60 },
-          { id: 'loc_lingyu', name: '凌宇神社', connectedTo: ['loc_nancuiping', 'loc_zhicheng'], isBlocked: false, x: 60, y: 80 },
-          { id: 'loc_zhicheng', name: '志成桥', connectedTo: ['loc_lingyu', 'loc_jikong'], isBlocked: false, x: 40, y: 85 },
-          { id: 'loc_jikong', name: '疾控中心', connectedTo: ['loc_zhicheng', 'loc_yidui'], isBlocked: false, x: 30, y: 60 },
-        ];
-        const effectMap = { '阿萨姆疯人院': { type: 'asylum_extra_attack' as const, name: '多刀', description: '' }, '中心公园': { type: 'unblockable' as const, name: '不会封锁', description: '' }, '商业街': { type: 'crowded' as const, name: '无视野', description: '' }, '一大队': { type: 'no_attack' as const, name: '禁武', description: '' }, '南翠屏公园': { type: 'mass_civilian_death' as const, name: '连锁', description: '' }, '凌宇神社': { type: 'shrine_vision' as const, name: '神视', description: '' }, '志成桥': { type: 'bridge_jump' as const, name: '地铁', description: '', extraDestinations: ['商业街', '阿萨姆疯人院'] }, '疾控中心': { type: 'identity_transform' as const, name: '变异', description: '' } };
-        locs.forEach(l => { l.effect = effectMap[l.name as keyof typeof effectMap] as any; });
-        state.tempLocations = locs as any;
-        state.locations = locs as any;
-        // 分英雄
-        if (state.heroPoolEnabled) {
-          const pool = [...HERO_POOL_V1_1_IDS];
-          for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-          state.players.forEach((p, i) => { if (i < pool.length) p.heroId = pool[i]; else p.heroId = ''; });
-        }
-        // 随机放置
-        const avLocs = state.locations.filter(l => !l.isBlocked);
-        if (avLocs.length > 0) {
-          state.players.forEach(p => {
-            const r = avLocs[Math.floor(Math.random() * avLocs.length)];
-            if (r) p.locationId = r.id;
-          });
-        }
-        // 直接进入 action1
-        state.phase = 'action1';
-        state.round = 1;
-        state.isPlaying = true;
       }),
 
     resetGame: () =>
