@@ -445,8 +445,9 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
             players={players} locations={locations} alivePlayers={alivePlayers}
             onNextPhase={handleReady}
           />
-        ) : (<></>
-        <div className="flex-1 p-2 min-h-0 relative">
+        ) : (
+          <>
+          <div className="flex-1 p-2 min-h-0 relative">
           {locations.length > 0 ? (
             <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
               {/* ── 连线 ── */}
@@ -636,7 +637,8 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
             <p className="text-xs text-slate-500">加载中...</p>
           )}
         </div>
-      </>}
+      </>
+      )}
       </main>
 
       {/* ═══ 底部操作栏 ═══ */}
