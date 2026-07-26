@@ -430,15 +430,12 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 
         {/* 玩家信息 */}
         {currentPlayer && hero && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-              style={{ backgroundColor: hero.color }}>
-              {hero.name.charAt(0)}
+          <div className=\"flex items-center gap-1.5 shrink-0\">
+            <div className=\"hidden sm:block text-[10px] leading-tight text-right\">
+              <p className=\"text-white font-medium\">{hero.name} · {hero.title}</p>
+              <p className=\"text-slate-400\">{currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
             </div>
-            <div className="hidden sm:block text-[10px] leading-tight">
-              <p className="text-white font-medium">{hero.name}</p>
-              <p className="text-slate-400">{currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
-            </div>
+            <div className=\"sm:hidden text-[10px] text-white font-medium\">{hero.name}</div>
           </div>
         )}
 
@@ -868,7 +865,6 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
       <p className="text-xs text-slate-400 text-center">点击选择你要投票淘汰的玩家</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {alivePlayers.map((p: any, idx: number) => {
-          const pHero = p.heroId ? getHeroById(p.heroId) : null
           const isSelected = voteTarget === p.id
           const isMe = p.id === currentPlayer?.id
           return (
@@ -882,19 +878,11 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
                     : 'bg-slate-800 border-slate-700 hover:border-indigo-500'
               }`}>
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 relative"
-                  style={{ backgroundColor: pHero?.color || '#6366f1' }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 bg-slate-600">
                   {idx + 1}
-                  <span className="absolute -top-1 -right-1 text-[8px]">{pHero?.name?.charAt(0) || '?'}</span>
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{isMe ? '你' : p.name}</p>
-                  {pHero && (
-                    <span className="inline-block text-[9px] px-1.5 py-0.5 rounded mt-0.5 text-white font-medium"
-                      style={{ backgroundColor: pHero.color + '80' }}>
-                      {pHero.name}
-                    </span>
-                  )}
                 </div>
               </div>
               {isSelected && (
