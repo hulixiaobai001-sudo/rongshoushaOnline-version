@@ -32,13 +32,14 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
         resetGame()
         addLog('初始化游戏引擎...')
 
-        // 填充调试空壳玩家
-        if (botNames && botNames.length > 0) {
-          botNames.forEach((name) => {
-            addPlayer(name)
-            addLog(`添加玩家: ${name}`)
-          })
-        }
+        // 填充玩家（非调试模式也用默认名字）
+        const names = (botNames && botNames.length > 0)
+          ? botNames
+          : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+        names.forEach((name) => {
+          addPlayer(name)
+          addLog(`添加玩家: ${name}`)
+        })
 
         // 步骤1：分配身份
         setCurrentStep(0)
