@@ -381,9 +381,13 @@ export const useGameStore = create<GameStore>()(
     assignIdentities: () =>
       set((state) => {
         const totalPlayers = state.players.length;
+        if (totalPlayers === 0) return;
+        // 动态计算杀手数量：每4人1杀手，至少1个，最多不超过总人数1/3
+        const dynamicKillers = Math.max(1, Math.min(Math.floor(totalPlayers / 4), Math.floor(totalPlayers / 3)));
+        const dynamicCivilians = totalPlayers - dynamicKillers;
         const identities: Identity[] = [];
-        for (let i = 0; i < state.killerCount; i++) identities.push('killer');
-        for (let i = 0; i < state.civilianCount; i++) identities.push('civilian');
+        for (let i = 0; i < dynamicKillers; i++) identities.push('killer');
+        for (let i = 0; i < dynamicCivilians; i++) identities.push('civilian');
         if (identities.length < totalPlayers) {
           while (identities.length < totalPlayers) identities.push('civilian');
         } else if (identities.length > totalPlayers) {
@@ -472,11 +476,15 @@ export const useGameStore = create<GameStore>()(
         // vote_result → 回到 action1，轮次+1
         if (state.phase === 'vote_result') {
           state.round++;
-          // 清空每轮的技能使用计数
           state.roundSkillUsage = {};
-          // 清空封锁地点
           state.blockedLocations = [];
           state.locations.forEach(l => { l.isBlocked = false; });
+          // 确保存活玩家有位置
+          const aliveNoLoc = state.players.filter(p => p.status === 'alive' && !p.locationId);
+          if (aliveNoLoc.length > 0) {
+            const avLocs = state.locations.filter(l => !l.isBlocked);
+            if (avLocs.length > 0) aliveNoLoc.forEach(p => { p.locationId = avLocs[Math.floor(Math.random() * avLocs.length)].id; });
+          }
           const next = 'action1';
           state.phase = next;
           state.events.push({
