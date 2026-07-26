@@ -21,7 +21,7 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
-  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame, addPlayer } = useGameStore()
+  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame, addPlayer, nextPhase } = useGameStore()
 
   useEffect(() => {
     let cancelled = false
@@ -78,10 +78,16 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
         addLog('英雄分配完成')
         setProgress(83)
 
-        // 步骤6：进入游戏
+        // 步骤6：跳过设置阶段，直接进入游戏
         setCurrentStep(5)
         await delay(debugMode ? 200 : 500)
         if (cancelled) return
+        // 自动推进到 action1 阶段
+        addLog('跳过前置阶段...')
+        nextPhase() // identity → start
+        if (!cancelled) await delay(100)
+        nextPhase() // start → action1
+        if (!cancelled) await delay(100)
         addLog('游戏准备就绪')
         setProgress(100)
       } catch (e) {
