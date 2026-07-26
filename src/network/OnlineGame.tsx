@@ -86,7 +86,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   useEffect(() => { setHasMoved(false) }, [phase])
 
   // 当前玩家（开发阶段固定为 players[0]）
-  const currentPlayer = players[0]
+  const currentPlayer = players && players.length > 0 ? players[0] : null
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
 
   // ── 阶段信息 ──
@@ -216,8 +216,9 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       return
     }
 
-    // 检查阶段
-    if (!skill.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote'))) {
+    // 检查阶段 - 灵活匹配
+    const phaseMatch = skill.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote') || p === phase)
+    if (!phaseMatch) {
       info('无法使用', `【${skill.name}】只能在 ${skill.usablePhase.join(', ')} 阶段使用`)
       return
     }
@@ -399,14 +400,14 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   // ═══════════════════════════════════════════════════
 
   // 判断当前可用的英雄技能
-  const availableSkills = hero?.skills.filter(s => {
+  const availableSkills = currentPlayer && hero ? hero.skills.filter(s => {
     // 检查阶段
-    const phaseOk = s.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote'))
+    const phaseOk = s.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote') || p === phase)
     // 检查次数
     const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
     const notUsed = s.limit === 'unlimited' || s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)
     return phaseOk && notUsed
-  }) || []
+  }) : []
 
   // 判断是否为选目标模式
   const isTargetingMode = interaction === 'skill_target' && selectedSkill
@@ -821,15 +822,20 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
       {droneLoc && (
         <p className="text-[9px] text-cyan-400">🛸 无人机: {droneLoc.name}</p>
       )}
-      {/* 无可追踪信息时显示记录本 */}
+      {/* 无可追踪信息时显示记录本按钮 */}
       {(!trackedPlayer || !trackRecords || trackRecords.length === 0) && !droneLoc && (
         <div>
           <p className="text-[9px] text-slate-500 font-medium mb-0.5">📋 记录</p>
-          <textarea
-            placeholder="记录你的推理..."
-            className="w-full h-12 bg-slate-900/50 border border-slate-700 rounded text-[9px] text-slate-400 p-1 resize-none placeholder:text-slate-600"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <button onClick={() => {
+            const saved = localStorage.getItem('rongshousha_notes') || ''
+            const note = prompt('记录你的推理：', saved)
+            if (note !== null) localStorage.setItem('rongshousha_notes', note)
+          }}
+            className="w-full text-left text-[9px] text-slate-400 bg-slate-900/50 border border-slate-700 rounded p-2 hover:bg-slate-800 transition-colors">
+            {localStorage.getItem('rongshousha_notes') 
+              ? localStorage.getItem('rongshousha_notes')?.substring(0, 50) + (localStorage.getItem('rongshousha_notes')!.length > 50 ? '...' : '')
+              : '点击记录推理...'}
+          </button>
         </div>
       )}
     </div>
@@ -1020,17 +1026,13 @@ function DeathReportSection({ players, locations, alivePlayers, onNextPhase }: {
 }
 
 // ═══════════════════════════════════════════════════
-//  英雄池翻页组件（每页3个英雄）
+//  英雄池滚动列表
 // ═══════════════════════════════════════════════════
 function HeroPagination() {
-  const [page, setPage] = useState(0)
-  const perPage = 3
-  const totalPages = Math.ceil(HERO_POOL.length / perPage)
-  const pageHeroes = HERO_POOL.slice(page * perPage, (page + 1) * perPage)
   return (
-    <div className="space-y-3">
-      <div className="space-y-2 transition-all duration-300">
-        {pageHeroes.map(hero => (
+    <ScrollArea className="max-h-[50vh] pr-2">
+      <div className="space-y-2">
+        {HERO_POOL.map(hero => (
           <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
@@ -1058,19 +1060,7 @@ function HeroPagination() {
           </div>
         ))}
       </div>
-      {/* 翻页控件 */}
-      <div className="flex items-center justify-center gap-3 pt-1">
-        <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-          className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm transition-colors">
-          ◀
-        </button>
-        <span className="text-[10px] text-slate-400 font-mono">{page + 1} / {totalPages}</span>
-        <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-          className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm transition-colors">
-          ▶
-        </button>
-      </div>
-    </div>
+    </ScrollArea>
   )
 }
 
