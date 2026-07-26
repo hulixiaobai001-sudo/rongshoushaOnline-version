@@ -602,7 +602,18 @@ export const useGameStore = create<GameStore>()(
         const attacker = state.players.find((p) => p.id === attackerId);
         if (!target || !attacker || target.status !== 'alive' || attacker.status !== 'alive') return;
 
-        // 检查目标是否有功夫 → 反弹！
+        // ── 地点效果：一大队（禁止攻击）──
+        const targetLoc = state.locations.find((l) => l.id === target.locationId);
+        if (targetLoc?.effect?.type === 'no_attack') {
+          state.events.push({
+            id: generateId('evt'), round: state.round, phase: state.phase,
+            timestamp: Date.now(), type: 'info',
+            description: `【一大队·禁武】${targetLoc.name} 内禁止攻击！${attacker.name} 的攻击被阻止`,
+          });
+          return; // 攻击被阻止
+        }
+
+        // ── 检查目标是否有功夫 → 反弹！──
         if (state.kungFuActivePlayers.includes(targetId)) {
           attacker.status = 'dead';
           attacker.isRevealed = true;
@@ -613,23 +624,52 @@ export const useGameStore = create<GameStore>()(
             playerId: attacker.id,
             description: `【功夫反弹】${target.name} 反杀了 ${attacker.name}！（${aLoc ? aLoc.name : ''}）`,
           });
-          // 检查胜利条件
           checkGameEnd(state);
           return;
         }
 
-        // 普通击杀
+        // ── 普通击杀 ──
         target.status = 'dead';
         target.isRevealed = true;
-        const tLoc = state.locations.find((l) => l.id === target.locationId);
         state.events.push({
           id: generateId('evt'), round: state.round, phase: state.phase,
           timestamp: Date.now(), type: 'death',
           playerId: target.id,
-          description: `${target.name}（${target.identity === 'killer' ? '杀手' : '平民'}）在${tLoc ? tLoc.name : ''}被 ${attacker.name} 击杀`,
+          description: `${target.name}（${target.identity === 'killer' ? '杀手' : '平民'}）在${targetLoc ? targetLoc.name : ''}被 ${attacker.name} 击杀`,
         });
 
-        // 检查胜利条件
+        // ── 地点效果：疾控中心（平民死亡→变为杀手）──
+        if (targetLoc?.effect?.type === 'identity_transform' && target.identity === 'civilian') {
+          target.status = 'alive'; // 复活
+          target.identity = 'killer'; // 变为杀手
+          target.isRevealed = false;
+          state.events.push({
+            id: generateId('evt'), round: state.round, phase: state.phase,
+            timestamp: Date.now(), type: 'info',
+            description: `【疾控中心·变异】${target.name} 死而复生！身份从平民转变为杀手！`,
+          });
+          checkGameEnd(state);
+          return;
+        }
+
+        // ── 地点效果：南翠屏公园（连锁死亡）──
+        if (targetLoc?.effect?.type === 'mass_civilian_death') {
+          const civiliansHere = state.players.filter(
+            p => p.id !== target.id && p.locationId === target.locationId && p.status === 'alive' && p.identity === 'civilian'
+          );
+          civiliansHere.forEach(civ => {
+            civ.status = 'dead';
+            civ.isRevealed = true;
+            state.events.push({
+              id: generateId('evt'), round: state.round, phase: state.phase,
+              timestamp: Date.now(), type: 'death',
+              playerId: civ.id,
+              description: `【南翠屏公园·连锁】${civ.name}（平民）受连锁反应影响死亡`,
+            });
+          });
+        }
+
+        // ── 检查胜利条件 ──
         checkGameEnd(state);
       }),
 

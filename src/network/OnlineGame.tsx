@@ -788,7 +788,22 @@ ${skill.description}`)
                       )}
                     </div>
                     {infoLocation.effect && infoLocation.effect.type !== 'placeholder' && (
-                      <p className="text-[10px] text-amber-400/80 mt-0.5">{infoLocation.effect.name}</p>
+                      <p className="text-[10px] text-amber-400/80 mt-0.5">
+                        {infoLocation.effect.name}
+                        <span className="text-slate-500 ml-1">
+                          — {{
+                            asylum_extra_attack: '杀手在此可额外攻击一次',
+                            unblockable: '不会被封锁',
+                            crowded: '平民无视野',
+                            shrine_vision: '可查看经过记录',
+                            identity_transform: '平民死亡会变异为杀手',
+                            no_attack: '禁止攻击',
+                            bridge_jump: '单向通行到商业街/疯人院',
+                            mass_civilian_death: '连锁死亡',
+                            placeholder: ''
+                          }[infoLocation.effect.type] || ''}
+                        </span>
+                      </p>
                     )}
                     {/* 同地点存活玩家 */}
                     {infoLocation.id === currentPlayer?.locationId && infoPlayers.filter(p => p.id !== currentPlayer?.id).length > 0 && (
