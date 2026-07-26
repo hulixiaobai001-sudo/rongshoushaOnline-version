@@ -496,7 +496,7 @@ export const useGameStore = create<GameStore>()(
           }
           // 屠城结算
           checkGameEnd(state);
-          if (state.phase === 'end') return;
+          if (state.winner) return;
           state.round++;
           state.roundSkillUsage = {};
           state.blockedLocations = [];
