@@ -79,10 +79,11 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [hasMoved, setHasMoved] = useState(false)
+  const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
-  useEffect(() => { setHasMoved(false) }, [phase])
+  useEffect(() => { setHasMoved(false); setHasAttacked(false) }, [phase])
 
   // 当前玩家（开发阶段固定为 players[0]）
   const currentPlayer = players && players.length > 0 ? players[0] : null
@@ -312,6 +313,7 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
       case 'basic_kill':
         if (targetPlayerId) {
           store.killPlayer(targetPlayerId, playerId)
+          setHasAttacked(true)
           const target = players.find(p => p.id === targetPlayerId)
           info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
         }
@@ -556,7 +558,7 @@ ${skill.description}`)
       </header>
 
       {/* ═══ 主内容区域 ═══ */}
-      <main className="flex-1 flex flex-col min-h-0">
+      <main className="flex-[3] flex flex-col min-h-0">
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
@@ -639,6 +641,18 @@ ${skill.description}`)
                         fill="none" stroke="#dc2626" strokeWidth="1.5" opacity="0.8">
                         <animate attributeName="r" values="5.5;6.5;5.5" dur="1s" repeatCount="indefinite" />
                       </circle>
+                    )}
+                    {/* 断路模式：显示可切断的道路 */}
+                    {selectedSkill?.id === 'zhangyang_cut_connection' && currentPlayer && (
+                      (() => {
+                        const cl = locations.find(l => l.id === currentPlayer!.locationId)
+                        return cl?.connectedTo.map(connId => {
+                          const ct = locations.find(l => l.id === connId)
+                          if (!ct) return null
+                          const mx = (cl.x + ct.x) / 2, my = (cl.y + ct.y) / 2
+                          return <text key={'cutable_'+connId} x={mx} y={my} textAnchor="middle" fontSize="2.5" fill="#f59e0b" fontWeight="bold">可切断</text>
+                        })
+                      })()
                     )}
                     {/* 被切断的道路（红×） */}
                     {store.cutConnections && store.cutConnections.map((cut: any, ci: number) => {
@@ -741,7 +755,7 @@ ${skill.description}`)
         <div className="shrink-0 bg-slate-800/60 border-t border-slate-700">
           <div className="flex gap-0">
             {/* 左栏：状态+地点信息+同地点玩家+尸体 */}
-            <div className="flex-1 px-3 py-2 min-w-0 border-r border-slate-700/50">
+            <div className="flex-1 px-3 py-1.5 min-w-0 border-r border-slate-700/50">
               {/* 状态效果显示 */}
               {currentPlayer && (
                 <div className="flex flex-wrap gap-1 mb-1.5">
@@ -904,13 +918,14 @@ ${skill.description}`)
           {/* 中：攻击按钮（杀手专用） */}
           {currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={() => {
+              if (hasAttacked) { info('已攻击过', '本阶段你已经攻击过了'); return }
               if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
               setSelectedSkill({ id: 'basic_kill', name: '攻击', description: '', type: 'active', targetType: 'same_location_player', limit: 'unlimited', usedCount: 0, maxUses: 99, usablePhase: [] } as any)
               setInteraction('skill_target')
             }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-medium transition-colors shrink-0">
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${hasAttacked ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600 text-white'}`}>
               <Swords className="w-3.5 h-3.5" />
-              刀人
+              {hasAttacked ? '已攻击' : '刀人'}
             </button>
           )}
 
