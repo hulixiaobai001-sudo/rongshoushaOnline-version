@@ -426,14 +426,11 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
-            phase={phase} round={round} day={day}
-            phaseLabel={phaseLabel}
             players={players} currentPlayer={currentPlayer} hero={hero}
             alivePlayers={alivePlayers}
             usedSkills={usedSkills}
             store={store}
             onNextPhase={handleReady}
-            onPopup={setPopup}
           />
         ) : phase === 'vote_result' ? (
           <VoteResultSection
@@ -707,11 +704,10 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 // ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
-function VoteSection({ phase, round, day, phaseLabel, players, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase, onPopup }: {
-  phase: string; round: number; day: number | null; phaseLabel: string;
+function VoteSection({ players, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
   players: any[]; currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
-  store: any; onNextPhase: () => void; onPopup: (p: any) => void;
+  store: any; onNextPhase: () => void;
 }) {
   const [voteTarget, setVoteTarget] = useState<string | null>(null)
   const [gunshotTarget, setGunshotTarget] = useState<string | null>(null)
