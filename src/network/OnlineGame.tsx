@@ -905,22 +905,16 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
         <div className="bg-slate-800/60 border border-red-800/50 rounded-xl p-3">
           <p className="text-xs font-bold text-red-400 mb-2">🔫 枪毙 — 选择处决目标</p>
           <div className="flex flex-wrap gap-1.5">
-            {alivePlayers.filter((p: any) => p.id !== currentPlayer?.id).map((p: any, idx: number) => {
+            {alivePlayers.filter((p: any) => p.id !== currentPlayer?.id).map((p: any) => {
               const isTarget = gunshotTarget === p.id
-              const pHero = p.heroId ? getHeroById(p.heroId) : null
               return (
                 <button key={p.id} onClick={() => setGunshotTarget(isTarget ? null : p.id)}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
                     isTarget
                       ? 'bg-red-700 border-red-500 text-white'
                       : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-red-500'
                   }`}>
-                  <span className="w-4 h-4 rounded-full text-[8px] font-bold text-white flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: pHero?.color || '#64748b' }}>
-                    {idx + 1}
-                  </span>
                   {p.name}
-                  {pHero && <span className="text-[9px] opacity-70">({pHero.name})</span>}
                 </button>
               )
             })}
