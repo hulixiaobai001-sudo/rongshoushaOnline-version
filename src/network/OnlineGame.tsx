@@ -485,6 +485,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
               {locations.map(loc => {
                 const locPlayers = players.filter(p => p.locationId === loc.id && p.status === 'alive')
                 const isCurrentLoc = locPlayers.some(p => p.id === currentPlayer?.id)
+                const isSelected = selectedLocationId === loc.id && !isCurrentLoc
                 const isReachable = isMoveMode && reachableLocations.some(r => r.id === loc.id)
                 const isClickable = isMoveMode ? isReachable : true
 
@@ -504,11 +505,16 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
                       <circle cx={loc.x} cy={loc.y} r={6.5}
                         fill="none" stroke="#f59e0b" strokeWidth="1.2" opacity="0.7" />
                     )}
+                    {/* 选中高亮 */}
+                    {isSelected && (
+                      <circle cx={loc.x} cy={loc.y} r={6}
+                        fill="none" stroke="#f59e0b" strokeWidth="1" opacity="0.5" />
+                    )}
                     {/* 地点圆圈 */}
                     <circle cx={loc.x} cy={loc.y} r={4.5}
-                      fill={isCurrentLoc ? '#4f46e5' : locPlayers.length > 0 ? '#475569' : '#334155'}
-                      stroke={isCurrentLoc ? '#818cf8' : isReachable ? '#818cf8' : isTargetingMode ? '#f59e0b' : '#475569'}
-                      strokeWidth={isCurrentLoc || isReachable || isTargetingMode ? '1.5' : '0.8'}
+                      fill={isCurrentLoc ? '#4f46e5' : isSelected ? '#92400e' : '#475569'}
+                      stroke={isCurrentLoc ? '#818cf8' : isSelected ? '#f59e0b' : isReachable ? '#818cf8' : isTargetingMode ? '#f59e0b' : '#475569'}
+                      strokeWidth={isCurrentLoc || isSelected || isReachable || isTargetingMode ? '1.5' : '0.8'}
                     />
                     {/* 地点名称 */}
                     <text x={loc.x} y={loc.y + 9} textAnchor="middle"
@@ -613,27 +619,27 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
                     {infoLocation.effect.name} — {infoLocation.effect.description}
                   </p>
                 )}
-                {infoPlayers.length > 0 && (
+                {/* 仅当前地点显示玩家名单 */}
+                {infoLocation.id === currentPlayer?.locationId && infoPlayers.length > 1 && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     <Users className="w-3 h-3 text-slate-500" />
-                    {infoPlayers.map(p => {
-                      const isMe = p.id === currentPlayer?.id
+                    {infoPlayers.filter(p => p.id !== currentPlayer?.id).map(p => {
                       const pHero = p.heroId ? getHeroById(p.heroId) : null
                       return (
                         <Badge key={p.id} variant="outline"
-                          className={`text-[10px] h-5 px-1.5 gap-1 ${isMe ? 'border-indigo-600 text-indigo-300 bg-indigo-900/30' : 'border-slate-600 text-slate-300'}`}>
+                          className="text-[10px] h-5 px-1.5 gap-1 border-slate-600 text-slate-300">
                           <span className="w-3.5 h-3.5 rounded-full text-[7px] font-bold flex items-center justify-center shrink-0"
                             style={{ backgroundColor: pHero?.color || '#6366f1' }}>
                             {players.indexOf(p) + 1}
                           </span>
-                          {isMe ? '你' : p.name}
+                          {p.name}
                         </Badge>
                       )
                     })}
                   </div>
                 )}
-                {infoPlayers.length === 0 && (
-                  <p className="text-[11px] text-slate-500 mt-0.5">没有其他玩家在此地点</p>
+                {infoLocation.id !== currentPlayer?.locationId && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">🔒 未知的人员信息</p>
                 )}
               </div>
               {selectedLocationId && selectedLocationId !== currentPlayer?.locationId && (
@@ -739,7 +745,7 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
     <div className="flex-1 flex flex-col p-3 gap-3 overflow-auto">
       <p className="text-xs text-slate-400 text-center">点击选择你要投票淘汰的玩家</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {alivePlayers.map((p: any) => {
+        {alivePlayers.map((p: any, idx: number) => {
           const pHero = p.heroId ? getHeroById(p.heroId) : null
           const isSelected = voteTarget === p.id
           const isMe = p.id === currentPlayer?.id
@@ -754,13 +760,19 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
                     : 'bg-slate-800 border-slate-700 hover:border-indigo-500'
               }`}>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 relative"
                   style={{ backgroundColor: pHero?.color || '#6366f1' }}>
-                  {pHero?.name?.charAt(0) || '?'}
+                  {idx + 1}
+                  <span className="absolute -top-1 -right-1 text-[8px]">{pHero?.name?.charAt(0) || '?'}</span>
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{isMe ? '你' : p.name}</p>
-                  {pHero && <p className="text-[10px] text-slate-400">{pHero.name}</p>}
+                  {pHero && (
+                    <span className="inline-block text-[9px] px-1.5 py-0.5 rounded mt-0.5 text-white font-medium"
+                      style={{ backgroundColor: pHero.color + '80' }}>
+                      {pHero.name}
+                    </span>
+                  )}
                 </div>
               </div>
               {isSelected && (
@@ -892,6 +904,61 @@ function DeathReportSection({ players, locations, alivePlayers, onNextPhase }: {
 }
 
 // ═══════════════════════════════════════════════════
+//  英雄池翻页组件（每页3个英雄）
+// ═══════════════════════════════════════════════════
+function HeroPagination() {
+  const [page, setPage] = useState(0)
+  const perPage = 3
+  const totalPages = Math.ceil(HERO_POOL.length / perPage)
+  const pageHeroes = HERO_POOL.slice(page * perPage, (page + 1) * perPage)
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2 transition-all duration-300">
+        {pageHeroes.map(hero => (
+          <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                style={{ backgroundColor: hero.color }}>
+                {hero.name.charAt(0)}
+              </div>
+              <span className="text-xs font-bold text-white">{hero.name}</span>
+              <span className="text-[10px] text-slate-500">{hero.title}</span>
+              <Badge variant="outline" className="text-[9px] h-4 ml-auto border-slate-600 text-slate-400">速{hero.speed}</Badge>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-1">{hero.description}</p>
+            {hero.skills.map(s => (
+              <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-slate-300">
+                <span className="text-amber-400 shrink-0 mt-0.5">◆</span>
+                <div>
+                  <span className="font-medium text-amber-300">{s.name}</span>
+                  <span className="text-slate-500 ml-1">
+                    ({s.targetType === 'self' ? '自身' : s.targetType === 'same_location_player' ? '同房间' : s.targetType === 'any_player' ? '任意' : '特殊'}
+                    · {s.limit === 'once_per_game' ? '全局1次' : s.limit === 'once_per_round' ? '每轮1次' : '无限'})
+                  </span>
+                  <p className="text-slate-400">{s.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* 翻页控件 */}
+      <div className="flex items-center justify-center gap-3 pt-1">
+        <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
+          className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm transition-colors">
+          ◀
+        </button>
+        <span className="text-[10px] text-slate-400 font-mono">{page + 1} / {totalPages}</span>
+        <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
+          className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm transition-colors">
+          ▶
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
 //  规则手册弹窗（双标签页）
 // ═══════════════════════════════════════════════════
 function RulesPopup({ onClose }: { onClose: () => void }) {
@@ -946,35 +1013,7 @@ function RulesPopup({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {HERO_POOL.map(hero => (
-                  <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                        style={{ backgroundColor: hero.color }}>
-                        {hero.name.charAt(0)}
-                      </div>
-                      <span className="text-xs font-bold text-white">{hero.name}</span>
-                      <span className="text-[10px] text-slate-500">{hero.title}</span>
-                      <Badge variant="outline" className="text-[9px] h-4 ml-auto border-slate-600 text-slate-400">速{hero.speed}</Badge>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mb-1">{hero.description}</p>
-                    {hero.skills.map(s => (
-                      <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-slate-300">
-                        <span className="text-amber-400 shrink-0 mt-0.5">◆</span>
-                        <div>
-                          <span className="font-medium text-amber-300">{s.name}</span>
-                          <span className="text-slate-500 ml-1">
-                            ({s.targetType === 'self' ? '自身' : s.targetType === 'same_location_player' ? '同房间' : s.targetType === 'any_player' ? '任意' : s.targetType === 'adjacent_location' ? '相邻地点' : '特殊'}
-                            · {s.limit === 'once_per_game' ? '全局1次' : s.limit === 'once_per_round' ? '每轮1次' : '无限'})
-                          </span>
-                          <p className="text-slate-400">{s.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <HeroPagination />
             )}
           </ScrollArea>
           <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
