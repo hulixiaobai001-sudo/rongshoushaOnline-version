@@ -577,11 +577,10 @@ export const useGameStore = create<GameStore>()(
         const toLoc = state.locations.find((l) => l.id === locationId);
         const fromLoc = state.locations.find((l) => l.id === player.locationId);
         // 志成桥单向检查
-        if (fromLoc?.effect?.type === 'bridge_jump') {
-          const canGo = fromLoc.effect?.extraDestinations || [];
-          // 允许前往 extraDestinations（单向桥的目标地）
+        if (fromLoc?.effect?.type === 'bridge_jump' && fromLoc.effect.extraDestinations) {
+          const canGo = fromLoc.effect.extraDestinations;
           if (canGo.includes(toLoc?.name || '')) {
-            // 允许通行：志成桥 → 商业街/疯人院
+            // 允许通行：志成桥 → 商业街/疯人院（单向）
           } else if (!fromLoc.connectedTo.includes(locationId)) {
             state.events.push({
               id: generateId('evt'), round: state.round, phase: state.phase,
