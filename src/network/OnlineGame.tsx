@@ -15,7 +15,6 @@ import {
   Skull, Heart,
   Navigation
 } from 'lucide-react'
-import { LoadingScreen } from './LoadingScreen'
 
 // ─── 弹窗类型 ────────────────────────────────────
 type PopupType = 'confirm' | 'info' | 'settings' | 'rules'
@@ -110,12 +109,24 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
 
-  // ── 加载完成（无论什么模式，最多等3秒） ──
+  // ── 初始化：组件挂载时初始化游戏 ──
   useEffect(() => {
-    if (!loading) return
+    // 填充玩家并初始化
+    const names = botNames && botNames.length > 0 ? botNames
+      : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+    // 通过 store 操作初始化
+    store.resetGame()
+    names.forEach(n => store.addPlayer(n))
+    store.assignIdentities()
+    store.loadDefaultMap()
+    store.assignHeroes()
+    store.randomPlaceAll()
+    store.nextPhase() // identity → start
+    store.nextPhase() // start → action1
+    // 3秒后关闭加载画面
     const t = setTimeout(() => setLoading(false), 3000)
     return () => clearTimeout(t)
-  }, [loading])
+  }, [])
 
   // ── 点击的地点信息 ──
   const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
@@ -509,7 +520,19 @@ ${skill.description}`)
 
   // ── 加载中 ──
   if (loading) {
-    return <LoadingScreen debugMode={debugMode} botNames={botNames} onComplete={() => setLoading(false)} />
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div className="text-center space-y-4">
+          <div className="text-5xl mb-3 animate-pulse">🦊</div>
+          <h2 className="text-lg font-bold text-white">准备中</h2>
+          <div className="w-48 h-1.5 bg-slate-700 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-indigo-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+          <p className="text-xs text-slate-500">游戏即将开始...</p>
+          <p className="text-[9px] text-slate-600">第一次进入的玩家需要等待一会，完成本地初始化，请谅解</p>
+        </div>
+      </div>
+    )
   }
 
   // ═══════════════════════════════════════════════════
