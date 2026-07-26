@@ -1051,27 +1051,79 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
 }) {
   const deadPlayers = players.filter((p: any) => p.status === 'dead')
   const newlyDead = deadPlayers.filter((p: any) => p.isRevealed)
-  const votedOut = newlyDead.slice(-3) // 最近死亡的玩家
+  const votedOut = newlyDead.slice(-3)
+  const winner = useGameStore.getState().winner
+
+  // 统计谁投了谁
+  const voteMap: Record<string, string[]> = {}
+  players.forEach((p: any) => {
+    if (p.votedFor) {
+      if (!voteMap[p.votedFor]) voteMap[p.votedFor] = []
+      voteMap[p.votedFor].push(p.name)
+    }
+  })
+
+  // 胜利界面
+  if (winner) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4">
+        <div className="text-6xl">{winner === 'good' ? '👑' : '🗡️'}</div>
+        <h2 className="text-xl font-bold text-white">
+          {winner === 'good' ? '好人阵营胜利！' : '杀手阵营胜利！'}
+        </h2>
+        <p className="text-sm text-slate-400">
+          {winner === 'good' ? '所有杀手已被消灭' : '平民已被全部消灭（屠城）'}
+        </p>
+        <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
+        <button onClick={onNextPhase}
+          className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
+          返回大厅
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 overflow-auto">
       <div className="text-4xl">📊</div>
-      <h2 className="text-lg font-bold text-white">投票结果</h2>
+      <h2 className="text-lg font-bold text-white">投票结果公示</h2>
+
+      {/* 被投出玩家 */}
       {votedOut.length > 0 ? (
         <div className="space-y-2 w-full max-w-xs">
           {votedOut.map((p: any) => (
-            <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-center">
-              <p className="text-base font-bold text-white">{p.name}</p>
-              <p className="text-xs text-slate-400">{p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
+            <div key={p.id} className="bg-red-900/30 border border-red-700/50 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-white">{p.name} 被投票出局</p>
+              <p className="text-xs">{p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
             </div>
           ))}
         </div>
       ) : (
         <p className="text-sm text-slate-400">无人被投票出局</p>
       )}
+
+      {/* 投票详情 */}
+      {Object.keys(voteMap).length > 0 && (
+        <div className="w-full max-w-xs bg-slate-800/50 rounded-xl p-3 border border-slate-700">
+          <p className="text-xs font-bold text-slate-300 mb-2">📋 投票详情</p>
+          <div className="space-y-1.5">
+            {Object.entries(voteMap).map(([targetId, voters]) => {
+              const target = players.find((p: any) => p.id === targetId)
+              return (
+                <div key={targetId} className="text-[10px] text-slate-400">
+                  <span className="text-white">{target?.name || '未知'}</span>
+                  {' ← '}
+                  {voters.join('、')}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
       <button onClick={onNextPhase}
-        className="mt-2 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
+        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
         进入下一轮
       </button>
     </div>
