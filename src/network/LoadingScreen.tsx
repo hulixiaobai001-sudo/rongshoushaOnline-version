@@ -21,7 +21,7 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
   const [currentStep, setCurrentStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
-  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame, addPlayer, nextPhase } = useGameStore()
+  const { loadDefaultMap, assignIdentities, assignHeroes, resetGame, addPlayer, nextPhase, randomPlaceAll } = useGameStore()
 
   useEffect(() => {
     let cancelled = false
@@ -82,6 +82,10 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
         setCurrentStep(5)
         await delay(debugMode ? 200 : 500)
         if (cancelled) return
+        // 随机放置所有玩家到地图上
+        addLog('随机放置玩家...')
+        randomPlaceAll()
+        if (!cancelled) await delay(100)
         // 自动推进到 action1 阶段
         addLog('跳过前置阶段...')
         nextPhase() // identity → start

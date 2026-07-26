@@ -394,6 +394,20 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
           </Badge>
         </div>
 
+        {/* 玩家信息 */}
+        {currentPlayer && hero && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+              style={{ backgroundColor: hero.color }}>
+              {hero.name.charAt(0)}
+            </div>
+            <div className="hidden sm:block text-[10px] leading-tight">
+              <p className="text-white font-medium">{hero.name}</p>
+              <p className="text-slate-400">{currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1" />
 
         {/* 存活/死亡 */}
@@ -512,8 +526,8 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
                         {loc.effect.name}
                       </text>
                     )}
-                    {/* 玩家图标 */}
-                    {locPlayers.map((p, i) => {
+                    {/* 玩家图标 - 仅当前地点显示 */}
+                    {isCurrentLoc && locPlayers.map((p, i) => {
                       const angle = (2 * Math.PI * i) / Math.max(locPlayers.length, 1) - Math.PI / 2
                       const px = loc.x + Math.cos(angle) * 7
                       const py = loc.y + Math.sin(angle) * 7
@@ -879,6 +893,99 @@ function DeathReportSection({ players, locations, alivePlayers, onNextPhase }: {
 }
 
 // ═══════════════════════════════════════════════════
+//  规则手册弹窗（双标签页）
+// ═══════════════════════════════════════════════════
+function RulesPopup({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'rules' | 'heroes'>('rules')
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card className="bg-slate-800 border-slate-700 w-full max-w-md max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-slate-400" />游戏手册
+            </h3>
+            <button onClick={onClose} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="flex gap-1 bg-slate-900 rounded-lg p-1">
+            <button onClick={() => setTab('rules')}
+              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                tab === 'rules' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}>📖 规则介绍</button>
+            <button onClick={() => setTab('heroes')}
+              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                tab === 'heroes' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}>⚡ 全英雄池</button>
+          </div>
+          <Separator className="bg-slate-700" />
+          <ScrollArea className="max-h-[55vh] pr-2">
+            {tab === 'rules' ? (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-indigo-400 mb-2">📖 基本规则</h4>
+                  <div className="text-xs text-slate-300 space-y-1.5">
+                    <p>• 游戏分为 <span className="text-red-400">杀手</span> 和 <span className="text-blue-400">平民</span> 两个阵营</p>
+                    <p>• 杀手在行动阶段可以攻击同房间的玩家</p>
+                    <p>• 有功夫的玩家受攻击时会反杀攻击者</p>
+                    <p>• 玩家在移动阶段可移动到相邻地点</p>
+                    <p>• 4轮行动/移动后进入投票阶段</p>
+                    <p>• 投票淘汰票数最高的玩家，展示身份</p>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-400 mb-2">🗺️ 地点效果</h4>
+                  <div className="text-xs text-slate-300 space-y-1.5">
+                    <p><span className="text-amber-400">⛑️ 阿萨姆疯人院</span> — 杀手多一次攻击</p>
+                    <p><span className="text-amber-400">🌳 中心公园</span> — 永不封锁</p>
+                    <p><span className="text-amber-400">🛍️ 商业街</span> — 平民无视野</p>
+                    <p><span className="text-amber-400">🏛️ 凌宇神社</span> — 查看经过人员</p>
+                    <p><span className="text-amber-400">🏥 疾控中心</span> — 平民死亡变杀手</p>
+                    <p><span className="text-amber-400">🌉 志成桥</span> — 单向通行</p>
+                    <p><span className="text-amber-400">🚔 一大队</span> — 禁止攻击</p>
+                    <p><span className="text-amber-400">🌲 南翠屏公园</span> — 连锁死亡</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {HERO_POOL.map(hero => (
+                  <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                        style={{ backgroundColor: hero.color }}>
+                        {hero.name.charAt(0)}
+                      </div>
+                      <span className="text-xs font-bold text-white">{hero.name}</span>
+                      <span className="text-[10px] text-slate-500">{hero.title}</span>
+                      <Badge variant="outline" className="text-[9px] h-4 ml-auto border-slate-600 text-slate-400">速{hero.speed}</Badge>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mb-1">{hero.description}</p>
+                    {hero.skills.map(s => (
+                      <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-slate-300">
+                        <span className="text-amber-400 shrink-0 mt-0.5">◆</span>
+                        <div>
+                          <span className="font-medium text-amber-300">{s.name}</span>
+                          <span className="text-slate-500 ml-1">
+                            ({s.targetType === 'self' ? '自身' : s.targetType === 'same_location_player' ? '同房间' : s.targetType === 'any_player' ? '任意' : s.targetType === 'adjacent_location' ? '相邻地点' : '特殊'}
+                            · {s.limit === 'once_per_game' ? '全局1次' : s.limit === 'once_per_round' ? '每轮1次' : '无限'})
+                          </span>
+                          <p className="text-slate-400">{s.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
 //  弹窗覆盖层
 // ═══════════════════════════════════════════════════
 function PopupOverlay({
@@ -927,89 +1034,7 @@ function PopupOverlay({
   }
 
   if (popup.type === 'rules') {
-    return (
-      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-        <Card className="bg-slate-800 border-slate-700 w-full max-w-md max-h-[85vh]" onClick={e => e.stopPropagation()}>
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-slate-400" />游戏规则 & 角色技能
-              </h3>
-              <button onClick={onClose} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
-            </div>
-            <Separator className="bg-slate-700" />
-            <ScrollArea className="max-h-[55vh] pr-2">
-              <div className="space-y-4">
-                {/* 基本规则 */}
-                <div>
-                  <h4 className="text-sm font-bold text-indigo-400 mb-2">📖 基本规则</h4>
-                  <div className="text-xs text-slate-300 space-y-1.5">
-                    <p>• 游戏分为 <span className="text-red-400">杀手</span> 和 <span className="text-blue-400">平民</span> 两个阵营</p>
-                    <p>• 杀手在行动阶段可以攻击同房间的玩家</p>
-                    <p>• 结算阶段统一处理伤害，有功夫则反杀攻击者</p>
-                    <p>• 玩家在移动阶段可移动到相邻地点</p>
-                    <p>• 4轮探查/行动/移动后进入发言和投票阶段</p>
-                    <p>• 投票淘汰票数最高的玩家</p>
-                  </div>
-                </div>
-
-                {/* 地点效果 */}
-                <div>
-                  <h4 className="text-sm font-bold text-emerald-400 mb-2">🗺️ 地点效果</h4>
-                  <div className="text-xs text-slate-300 space-y-1.5">
-                    <p><span className="text-amber-400">⛑️ 阿萨姆疯人院</span> — 杀手在此攻击不消耗次数</p>
-                    <p><span className="text-amber-400">🌳 中心公园</span> — 永远不会被封锁</p>
-                    <p><span className="text-amber-400">🛍️ 商业街</span> — 平民无法看到周围的人</p>
-                    <p><span className="text-amber-400">🏛️ 凌宇神社</span> — 可查看地点经过人员</p>
-                    <p><span className="text-amber-400">🏥 疾控中心</span> — 平民死亡会变为杀手</p>
-                    <p><span className="text-amber-400">🌉 志成桥</span> — 单向通行</p>
-                    <p><span className="text-amber-400">🚔 一大队</span> — 禁止攻击</p>
-                    <p><span className="text-amber-400">🌲 南翠屏公园</span> — 连锁死亡</p>
-                  </div>
-                </div>
-
-                {/* 英雄技能 */}
-                <div>
-                  <h4 className="text-sm font-bold text-purple-400 mb-2">⚡ 英雄技能</h4>
-                  <div className="space-y-2">
-                    {HERO_POOL.map(hero => (
-                      <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                            style={{ backgroundColor: hero.color }}>
-                            {hero.name.charAt(0)}
-                          </div>
-                          <span className="text-xs font-bold text-white">{hero.name}</span>
-                          <span className="text-[10px] text-slate-500">{hero.title}</span>
-                          <Badge variant="outline" className="text-[9px] h-4 ml-auto border-slate-600 text-slate-400">
-                            速{hero.speed}
-                          </Badge>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mb-1">{hero.description}</p>
-                        {hero.skills.map(s => (
-                          <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-slate-300">
-                            <span className="text-amber-400 shrink-0 mt-0.5">◆</span>
-                            <div>
-                              <span className="font-medium text-amber-300">{s.name}</span>
-                              <span className="text-slate-500 ml-1">
-                                ({s.targetType === 'self' ? '自身' : s.targetType === 'same_location_player' ? '同房间' : s.targetType === 'any_player' ? '任意' : s.targetType === 'adjacent_location' ? '相邻地点' : '特殊'}
-                                · {s.limit === 'once_per_game' ? '全局1次' : s.limit === 'once_per_round' ? '每轮1次' : '无限'})
-                              </span>
-                              <p className="text-slate-400">{s.description}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-            <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <RulesPopup onClose={onClose} />
   }
 
   return (
