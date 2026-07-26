@@ -160,7 +160,7 @@ export const useGameStore = create<GameStore>()(
         state.players.push({
           id: generateId('player'),
           name,
-          identity: 'civilian',
+          identity: '' as any,
           status: 'alive',
           locationId: '',
           isRevealed: false,
@@ -388,8 +388,9 @@ export const useGameStore = create<GameStore>()(
 
     assignIdentities: () =>
       set((state) => {
-        // 检查是否有玩家已手动分配身份
-        const hasManual = state.players.some(p => p.identity === 'killer' || p.identity === 'civilian');
+        // 检查是否有玩家已通过管理员面板手动分配身份
+        // addPlayer会给默认identity，用manualAssignment标记区分
+        const hasManual = (state as any)._manualIdentitySet === true;
         if (hasManual) { state.phase = 'identity'; return; }
         const totalPlayers = state.players.length;
         if (totalPlayers === 0) return;
