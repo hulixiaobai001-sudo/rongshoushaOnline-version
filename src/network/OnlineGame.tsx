@@ -111,20 +111,22 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
 
   // ── 初始化：组件挂载时初始化游戏 ──
   useEffect(() => {
-    // 填充玩家并初始化
-    const names = botNames && botNames.length > 0 ? botNames
-      : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
-    // 通过 store 操作初始化
-    store.resetGame()
-    names.forEach(n => store.addPlayer(n))
-    store.assignIdentities()
-    store.loadDefaultMap()
-    store.assignHeroes()
-    store.randomPlaceAll()
-    store.nextPhase() // identity → start
-    store.nextPhase() // start → action1
-    // 3秒后关闭加载画面
-    const t = setTimeout(() => setLoading(false), 3000)
+    try {
+      const names = botNames && botNames.length > 0 ? botNames
+        : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+      store.resetGame()
+      names.forEach(n => store.addPlayer(n))
+      store.assignIdentities()
+      store.loadDefaultMap()
+      store.assignHeroes()
+      store.randomPlaceAll()
+      // 阶段推进
+      store.nextPhase()
+      store.nextPhase()
+    } catch (e) {
+      console.error('Init error:', e)
+    }
+    const t = setTimeout(() => setLoading(false), 2000)
     return () => clearTimeout(t)
   }, [])
 
