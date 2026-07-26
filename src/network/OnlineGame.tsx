@@ -10,10 +10,10 @@ import { Separator } from '@/components/ui/separator'
 import type { HeroSkill } from '@/types/hero'
 import {
   Settings, BookOpen, Footprints, Zap,
-  MapPin, Users,
+  MapPin,
   Check, X, AlertCircle, ChevronUp, ChevronDown,
   Skull, Heart,
-  Navigation, Sparkles
+  Navigation
 } from 'lucide-react'
 import { LoadingScreen } from './LoadingScreen'
 
@@ -710,7 +710,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
             </div>
             {/* 右栏：技能追踪/记录区 */}
             <div className="w-1/3 min-w-[100px] px-3 py-2">
-              <InfoPanel currentPlayer={currentPlayer} store={store} players={players} />
+              <InfoPanel store={store} players={players} />
             </div>
           </div>
         </div>
@@ -801,7 +801,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 // ═══════════════════════════════════════════════════
 //  信息面板（右栏：追踪/无人机/记录本）
 // ═══════════════════════════════════════════════════
-function InfoPanel({ currentPlayer, store, players }: { currentPlayer: any; store: any; players: any[] }) {
+function InfoPanel({ store, players }: { store: any; players: any[] }) {
   const { trackRecords, trackedPlayerId, droneLocationId, locations } = store
   const trackedPlayer = players.find((p: any) => p.id === trackedPlayerId)
   const droneLoc = locations?.find((l: any) => l.id === droneLocationId)
