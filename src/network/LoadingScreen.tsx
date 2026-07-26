@@ -27,71 +27,83 @@ export function LoadingScreen({ debugMode, botNames, onComplete }: LoadingScreen
     let cancelled = false
 
     const run = async () => {
-      // 重置游戏状态
-      resetGame()
-      addLog('初始化游戏引擎...')
+      try {
+        // 重置游戏状态
+        resetGame()
+        addLog('初始化游戏引擎...')
 
-      // 填充调试空壳玩家
-      if (botNames && botNames.length > 0) {
-        botNames.forEach((name) => {
-          addPlayer(name)
-          addLog(`添加玩家: ${name}`)
-        })
+        // 填充调试空壳玩家
+        if (botNames && botNames.length > 0) {
+          botNames.forEach((name) => {
+            addPlayer(name)
+            addLog(`添加玩家: ${name}`)
+          })
+        }
+
+        // 步骤1：分配身份
+        setCurrentStep(0)
+        await delay(debugMode ? 300 : 800)
+        if (cancelled) return
+        assignIdentities()
+        addLog('身份分配完成')
+        setProgress(16)
+
+        // 步骤2：准备地图
+        setCurrentStep(1)
+        await delay(debugMode ? 300 : 800)
+        if (cancelled) return
+        loadDefaultMap()
+        addLog('默认地图加载完成')
+        setProgress(33)
+
+        // 步骤3：加载资源
+        setCurrentStep(2)
+        await delay(debugMode ? 400 : 1000)
+        if (cancelled) return
+        addLog('角色资源加载完成')
+        setProgress(50)
+
+        // 步骤4：设备检测
+        setCurrentStep(3)
+        await delay(debugMode ? 300 : 600)
+        if (cancelled) return
+        addLog('设备配置检测通过')
+        setProgress(66)
+
+        // 步骤5：分配英雄
+        setCurrentStep(4)
+        await delay(debugMode ? 300 : 800)
+        if (cancelled) return
+        assignHeroes()
+        addLog('英雄分配完成')
+        setProgress(83)
+
+        // 步骤6：进入游戏
+        setCurrentStep(5)
+        await delay(debugMode ? 200 : 500)
+        if (cancelled) return
+        addLog('游戏准备就绪')
+        setProgress(100)
+      } catch (e) {
+        addLog(`加载异常: ${e}`)
       }
 
-      // 步骤1：分配身份
-      setCurrentStep(0)
-      await delay(debugMode ? 300 : 800)
-      if (cancelled) return
-      assignIdentities()
-      addLog('身份分配完成')
-      setProgress(16)
-
-      // 步骤2：准备地图
-      setCurrentStep(1)
-      await delay(debugMode ? 300 : 800)
-      if (cancelled) return
-      loadDefaultMap()
-      addLog('默认地图加载完成')
-      setProgress(33)
-
-      // 步骤3：加载资源
-      setCurrentStep(2)
-      await delay(debugMode ? 400 : 1000)
-      if (cancelled) return
-      addLog('角色资源加载完成')
-      setProgress(50)
-
-      // 步骤4：设备检测
-      setCurrentStep(3)
-      await delay(debugMode ? 300 : 600)
-      if (cancelled) return
-      addLog('设备配置检测通过')
-      setProgress(66)
-
-      // 步骤5：分配英雄
-      setCurrentStep(4)
-      await delay(debugMode ? 300 : 800)
-      if (cancelled) return
-      assignHeroes()
-      addLog('英雄分配完成')
-      setProgress(83)
-
-      // 步骤6：进入游戏
-      setCurrentStep(5)
-      await delay(debugMode ? 200 : 500)
-      if (cancelled) return
-      addLog('游戏准备就绪')
-      setProgress(100)
-
-      // 完成
+      // 完成（无论成功还是异常都继续）
       await delay(300)
       if (cancelled) return
       onComplete()
     }
 
-    run()
-    return () => { cancelled = true }
+    // 安全后备：5秒超时自动完成
+    const fallbackTimer = setTimeout(() => {
+      if (!cancelled) {
+        addLog('安全超时，强制进入游戏')
+        onComplete()
+      }
+    }, 5000)
+
+    run().finally(() => clearTimeout(fallbackTimer))
+    return () => { cancelled = true; clearTimeout(fallbackTimer) }
   }, [])
 
   const addLog = (msg: string) => {

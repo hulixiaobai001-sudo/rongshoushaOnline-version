@@ -33,19 +33,20 @@ type GameInteraction = 'idle' | 'moving' | 'skill_target'
 
 // ─── 周/天/阶段 映射 ──────────────────────────────
 const PHASE_DAY_MAP: Record<string, number> = {
-  investigate1: 1, action1: 1, settlement1: 1, move1: 1,
-  investigate2: 2, action2: 2, settlement2: 2, move2: 2,
-  investigate3: 3, action3: 3, settlement3: 3, move4: 3,
-  investigate4: 4, action4: 4, settlement4: 4,
+  action1: 1, move1: 1,
+  action2: 2, move2: 2,
+  action3: 3, move3: 3,
+  action4: 4, move4: 4,
 }
 
 const PHASE_LABEL: Record<string, string> = {
-  investigate1: '探查阶段①', action1: '行动阶段①', settlement1: '结算阶段①', move1: '移动阶段①',
-  investigate2: '探查阶段②', action2: '行动阶段②', settlement2: '结算阶段②', move2: '移动阶段②',
-  investigate3: '探查阶段③', action3: '行动阶段③', settlement3: '结算阶段③', move4: '移动阶段③',
-  investigate4: '探查阶段④', action4: '行动阶段④', settlement4: '结算阶段④',
-  shrine_vision: '凌宇神社', death_report: '死亡播报',
-  speak: '发言阶段', vote: '投票阶段', end: '游戏结束',
+  action1: '行动阶段①', move1: '移动阶段',
+  action2: '行动阶段②', move2: '移动阶段',
+  action3: '行动阶段③', move3: '移动阶段',
+  action4: '行动阶段④', move4: '移动阶段',
+  death_report: '死亡播报',
+  vote: '投票阶段', vote_result: '投票结果',
+  end: '游戏结束',
   setup: '准备中', identity: '身份发布', start: '角色放置',
 }
 
@@ -420,8 +421,31 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         </button>
       </header>
 
-      {/* ═══ 地图区域 ═══ */}
+      {/* ═══ 主内容区域 ═══ */}
       <main className="flex-1 flex flex-col min-h-0">
+        {/* ── 投票阶段专用界面 ── */}
+        {phase === 'vote' ? (
+          <VoteSection
+            phase={phase} round={round} day={day}
+            phaseLabel={phaseLabel}
+            players={players} currentPlayer={currentPlayer} hero={hero}
+            alivePlayers={alivePlayers}
+            usedSkills={usedSkills}
+            store={store}
+            onNextPhase={handleReady}
+            onPopup={setPopup}
+          />
+        ) : phase === 'vote_result' ? (
+          <VoteResultSection
+            players={players} alivePlayers={alivePlayers}
+            onNextPhase={handleReady}
+          />
+        ) : phase === 'death_report' ? (
+          <DeathReportSection
+            players={players} locations={locations} alivePlayers={alivePlayers}
+            onNextPhase={handleReady}
+          />
+        ) : (<></>
         <div className="flex-1 p-2 min-h-0 relative">
           {locations.length > 0 ? (
             <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
@@ -612,6 +636,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
             <p className="text-xs text-slate-500">加载中...</p>
           )}
         </div>
+      </>}
       </main>
 
       {/* ═══ 底部操作栏 ═══ */}
@@ -673,6 +698,184 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       {/* ═══ 弹窗 ═══ */}
       {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
         players={players} currentPhase={phase} />}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+//  投票阶段组件
+// ═══════════════════════════════════════════════════
+function VoteSection({ phase, round, day, phaseLabel, players, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase, onPopup }: {
+  phase: string; round: number; day: number | null; phaseLabel: string;
+  players: any[]; currentPlayer: any; hero: any;
+  alivePlayers: any[]; usedSkills: Record<string, string[]>;
+  store: any; onNextPhase: () => void; onPopup: (p: any) => void;
+}) {
+  const [voteTarget, setVoteTarget] = useState<string | null>(null)
+  const [gunshotTarget, setGunshotTarget] = useState<string | null>(null)
+
+  const isLiLongxiang = hero?.id === 'lilongxiang'
+  const gunShotUsed = isLiLongxiang && (usedSkills[currentPlayer?.id || ''] || []).includes('lilongxiang_gunshot')
+
+  const handleConfirmVote = () => {
+    if (voteTarget) {
+      store.submitVotes([{ voterId: currentPlayer.id, targetId: voteTarget }])
+    }
+    onNextPhase()
+  }
+
+  return (
+    <div className="flex-1 flex flex-col p-3 gap-3 overflow-auto">
+      <p className="text-xs text-slate-400 text-center">点击选择你要投票淘汰的玩家</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {alivePlayers.map((p: any) => {
+          const pHero = p.heroId ? getHeroById(p.heroId) : null
+          const isSelected = voteTarget === p.id
+          const isMe = p.id === currentPlayer?.id
+          return (
+            <button key={p.id} onClick={() => !isMe && setVoteTarget(isSelected ? null : p.id)}
+              disabled={isMe}
+              className={`relative p-3 rounded-xl border transition-all text-left ${
+                isSelected
+                  ? 'bg-red-900/40 border-red-500 ring-1 ring-red-500'
+                  : isMe
+                    ? 'bg-slate-800/30 border-slate-700 opacity-50'
+                    : 'bg-slate-800 border-slate-700 hover:border-indigo-500'
+              }`}>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                  style={{ backgroundColor: pHero?.color || '#6366f1' }}>
+                  {pHero?.name?.charAt(0) || '?'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{isMe ? '你' : p.name}</p>
+                  {pHero && <p className="text-[10px] text-slate-400">{pHero.name}</p>}
+                </div>
+              </div>
+              {isSelected && (
+                <div className="absolute top-1 right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 枪毙技能（李龙祥） */}
+      {isLiLongxiang && !gunShotUsed && (
+        <div className="bg-slate-800/60 border border-red-800/50 rounded-xl p-3">
+          <p className="text-xs font-bold text-red-400 mb-2">🔫 枪毙 — 选择处决目标</p>
+          <div className="flex flex-wrap gap-1.5">
+            {alivePlayers.filter((p: any) => p.id !== currentPlayer?.id).map((p: any) => {
+              const isTarget = gunshotTarget === p.id
+              const pHero = p.heroId ? getHeroById(p.heroId) : null
+              return (
+                <button key={p.id} onClick={() => setGunshotTarget(isTarget ? null : p.id)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                    isTarget
+                      ? 'bg-red-700 border-red-500 text-white'
+                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-red-500'
+                  }`}>
+                  {p.name} {pHero ? `(${pHero.name})` : ''}
+                </button>
+              )
+            })}
+          </div>
+          {gunshotTarget && (
+            <button onClick={() => { store.executeGunShot(currentPlayer.id, gunshotTarget); setGunshotTarget(null) }}
+              className="mt-2 w-full py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-bold text-white transition-colors">
+              🔫 执行枪决
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 确认投票 */}
+      <div className="flex gap-2 mt-auto pt-2">
+        <button onClick={handleConfirmVote}
+          className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors
+                     disabled:opacity-50 disabled:cursor-not-allowed">
+          {voteTarget ? `确认投票（${alivePlayers.find((p: any) => p.id === voteTarget)?.name}）` : '确认投票'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+//  投票结果公示组件
+// ═══════════════════════════════════════════════════
+function VoteResultSection({ players, alivePlayers, onNextPhase }: {
+  players: any[]; alivePlayers: any[]; onNextPhase: () => void;
+}) {
+  const deadPlayers = players.filter((p: any) => p.status === 'dead')
+  const newlyDead = deadPlayers.filter((p: any) => p.isRevealed)
+  const votedOut = newlyDead.slice(-3) // 最近死亡的玩家
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4">
+      <div className="text-4xl">📊</div>
+      <h2 className="text-lg font-bold text-white">投票结果</h2>
+      {votedOut.length > 0 ? (
+        <div className="space-y-2 w-full max-w-xs">
+          {votedOut.map((p: any) => (
+            <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-white">{p.name}</p>
+              <p className="text-xs text-slate-400">{p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400">无人被投票出局</p>
+      )}
+      <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
+      <button onClick={onNextPhase}
+        className="mt-2 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
+        进入下一轮
+      </button>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+//  死亡播报组件
+// ═══════════════════════════════════════════════════
+function DeathReportSection({ players, locations, alivePlayers, onNextPhase }: {
+  players: any[]; locations: any[]; alivePlayers: any[]; onNextPhase: () => void;
+}) {
+  const deadPlayers = players.filter((p: any) => p.status === 'dead')
+  // 本轮死亡的玩家（死亡但地点还没封锁的）
+  const freshDead = deadPlayers.filter((p: any) => {
+    const loc = locations.find((l: any) => l.id === p.locationId)
+    return loc && !loc.isBlocked
+  })
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4">
+      <div className="text-4xl">💀</div>
+      <h2 className="text-lg font-bold text-white">死亡播报</h2>
+      {freshDead.length > 0 ? (
+        <div className="space-y-2 w-full max-w-xs">
+          {freshDead.map((p: any) => (
+            <div key={p.id} className="bg-slate-800 border border-red-800/50 rounded-xl p-3 text-center">
+              <p className="text-base font-bold text-white">{p.name}</p>
+              <p className="text-xs text-slate-400">
+                {p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}
+                {' · '}
+                {locations.find((l: any) => l.id === p.locationId)?.name || '未知地点'}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400">本轮无人死亡</p>
+      )}
+      <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
+      <button onClick={onNextPhase}
+        className="mt-2 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
+        进入投票阶段
+      </button>
     </div>
   )
 }

@@ -33,35 +33,28 @@ const initialState: GameState = {
   roundSkillUsage: {},
 };
 
-// 阶段顺序
+// 阶段顺序（游戏循环：action→move×4→death→vote→vote_result→循环）
 const phaseOrder: GamePhase[] = [
   'setup',
   'identity',
   'start',
-  'investigate1',
   'action1',
-  'settlement1',
   'move1',
-  'investigate2',
   'action2',
-  'settlement2',
   'move2',
-  'investigate3',
   'action3',
-  'settlement3',
-  'move4',
-  'investigate4',
+  'move3',
   'action4',
-  'settlement4',
-  'shrine_vision',
+  'move4',
   'death_report',
-  'speak',
   'vote',
+  'vote_result',
   'end',
 ];
 
-// 下一个阶段
+// 下一个阶段（vote_result 后回到 action1 循环）
 function getNextPhase(phase: GamePhase): GamePhase {
+  if (phase === 'vote_result') return 'action1';
   const idx = phaseOrder.indexOf(phase);
   if (idx >= 0 && idx < phaseOrder.length - 1) {
     return phaseOrder[idx + 1];
@@ -461,36 +454,33 @@ export const useGameStore = create<GameStore>()(
 
     nextPhase: () =>
       set((state) => {
-        const currentIdx = phaseOrder.indexOf(state.phase);
-        if (currentIdx < 0 || currentIdx >= phaseOrder.length - 1) return;
+        if (state.phase === 'end') return;
 
-        // 投票阶段结束
+        // 投票阶段结束：先处理投票结果，再进入 vote_result
         if (state.phase === 'vote') {
           handleVoteEnd(state);
           return;
         }
 
-        // 结算阶段：handleSettlement 内部已处理阶段推进
-        if (state.phase.startsWith('settlement')) {
-          handleSettlement(state);
-          return;
-        }
-
-        // 凌宇神社查看阶段：直接进入死亡播报
-        if (state.phase === 'shrine_vision') {
-          state.shrineVisionActive = false;
-          state.shrineVisionPlayerId = null;
-          const next = getNextPhase(state.phase);
+        // vote_result → 回到 action1，轮次+1
+        if (state.phase === 'vote_result') {
+          state.round++;
+          // 清空每轮的技能使用计数
+          state.roundSkillUsage = {};
+          // 清空封锁地点
+          state.blockedLocations = [];
+          state.locations.forEach(l => { l.isBlocked = false; });
+          const next = 'action1';
           state.phase = next;
           state.events.push({
             id: generateId('evt'), round: state.round, phase: next,
             timestamp: Date.now(), type: 'phase_change',
-            description: `神视结束，进入${getPhaseName(next)}`,
+            description: `进入第${state.round}轮，${getPhaseName(next)}`,
           });
           return;
         }
 
-        // 死亡播报阶段：封锁死亡地点
+        // 死亡播报阶段
         if (state.phase === 'death_report') {
           handleDeathReport(state);
           return;
@@ -499,14 +489,14 @@ export const useGameStore = create<GameStore>()(
         // 普通阶段推进
         const next = getNextPhase(state.phase);
 
-        // 离开移动阶段时，清除所有停步效果（停步只生效一个移动阶段）
+        // 离开移动阶段时清除停步效果
         if (state.phase.startsWith('move')) {
           state.players.forEach((p) => {
             if (p.halted) p.halted = false;
           });
         }
 
-        // 进入新的 action 阶段时，清空功夫状态
+        // 进入 action 阶段时清空功夫状态
         if (next.startsWith('action')) {
           state.kungFuActivePlayers = [];
         }
@@ -938,19 +928,15 @@ function handleVoteEnd(state: GameState) {
     state.dronePlayerId = null;
     state.droneRound = 0;
   }
-  // 回合+1，清空地点经过记录和每轮重置技能计数
-  state.round += 1;
+  // 清空地点经过记录
   state.locationVisits = {};
-  state.roundSkillUsage = {};
 
-  
-
-  state.phase = 'investigate1';
+  state.phase = 'vote_result';
 
   state.events.push({
-    id: generateId('evt'), round: state.round, phase: 'investigate1',
+    id: generateId('evt'), round: state.round, phase: 'vote_result',
     timestamp: Date.now(), type: 'phase_change',
-    description: `投票结束，进入第${state.round}轮探查阶段`,
+    description: '投票结束，进入结果公示',
   });
 }
 
@@ -1188,15 +1174,13 @@ function handleDeathReport(state: GameState) {
 
 function getPhaseName(phase: GamePhase): string {
   const names: Record<string, string> = {
-    setup: '游戏设置', identity: '身份发布', start: '游戏开始',
-    investigate1: '探查①', action1: '行动①', settlement1: '结算①',
-    move1: '移动②',
-    investigate2: '探查②', action2: '行动②', settlement2: '结算②',
-    move2: '移动③',
-    investigate3: '探查③', action3: '行动③', settlement3: '结算③',
-    move4: '移动④',
-    investigate4: '探查④', action4: '行动④', settlement4: '结算④',
-    speak: '发言', vote: '投票', end: '游戏结束',
+    setup: '设置', identity: '身份', start: '放置',
+    action1: '行动①', move1: '移动',
+    action2: '行动②', move2: '移动',
+    action3: '行动③', move3: '移动',
+    action4: '行动④', move4: '移动',
+    death_report: '死亡播报', vote: '投票',
+    vote_result: '投票结果', end: '结束',
   };
   return names[phase] || phase;
 }

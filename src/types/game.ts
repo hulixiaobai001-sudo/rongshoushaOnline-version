@@ -7,25 +7,17 @@ export type GamePhase =
   | 'setup'           // 设置阶段：配置玩家、身份、地图
   | 'identity'        // 身份发布阶段
   | 'start'           // 游戏开始阶段：角色放置
-  | 'investigate1'    // 探查阶段1
   | 'action1'         // 行动阶段1（杀手可以杀人）
-  | 'settlement1'     // 结算阶段1：处理action1的死亡 + 胜利判定
   | 'move1'           // 移动阶段1
-  | 'investigate2'    // 探查阶段2
   | 'action2'         // 行动阶段2（杀手可以杀人）
-  | 'settlement2'     // 结算阶段2：处理action2的死亡 + 胜利判定
   | 'move2'           // 移动阶段2
-  | 'investigate3'    // 探查阶段3
   | 'action3'         // 行动阶段3（杀手可以杀人）
-  | 'settlement3'     // 结算阶段3：处理action3的死亡 + 胜利判定
-  | 'move4'           // 移动阶段4
-  | 'investigate4'    // 探查阶段4
+  | 'move3'           // 移动阶段3
   | 'action4'         // 行动阶段4（杀手可以杀人）
-  | 'settlement4'     // 结算阶段4：处理action4的死亡 + 胜利判定
-  | 'shrine_vision'   // 凌宇神社查看阶段：选择地点查看经过人员
+  | 'move4'           // 移动阶段4
   | 'death_report'    // 死亡播报阶段：展示本轮死亡角色 + 封锁死亡地点
-  | 'speak'           // 发言阶段
   | 'vote'            // 投票阶段
+  | 'vote_result'     // 投票结果公示
   | 'end';            // 游戏结束
 
 /** 身份类型 */
@@ -196,25 +188,17 @@ export function getPhaseName(phase: GamePhase): string {
     setup: '游戏设置',
     identity: '身份发布',
     start: '游戏开始',
-    investigate1: '探查阶段 ①',
     action1: '行动阶段 ①',
-    settlement1: '结算阶段 ①',
-    move1: '移动阶段 ②',
-    investigate2: '探查阶段 ②',
+    move1: '移动阶段',
     action2: '行动阶段 ②',
-    settlement2: '结算阶段 ②',
-    move2: '移动阶段 ③',
-    move4: '移动阶段 ④',
-    investigate3: '探查阶段 ③',
+    move2: '移动阶段',
     action3: '行动阶段 ③',
-    settlement3: '结算阶段 ③',
-    investigate4: '探查阶段 ④',
+    move3: '移动阶段',
     action4: '行动阶段 ④',
-    settlement4: '结算阶段 ④',
-    shrine_vision: '凌宇神社',
+    move4: '移动阶段',
     death_report: '死亡播报',
-    speak: '发言阶段',
     vote: '投票阶段',
+    vote_result: '投票结果',
     end: '游戏结束',
   };
   return names[phase] || '未知阶段';
@@ -223,28 +207,20 @@ export function getPhaseName(phase: GamePhase): string {
 export function getPhaseDescription(phase: GamePhase): string {
   const descriptions: Record<string, string> = {
     setup: '配置玩家、身份数量和地图',
-    identity: '主持人查看并分配身份给各玩家',
-    start: '主持人将所有玩家放置到地图上',
-    investigate1: '告知各玩家其所在地点的其他玩家',
-    action1: '杀手选择目标 → 攻击记录在案（结算阶段统一处理）',
-    settlement1: '结算所有攻击：有功夫则反弹攻击者，无功夫则目标死亡',
-    move1: '主持人操控所有存活玩家移动',
-    investigate2: '告知各玩家其所在地点的其他玩家',
-    action2: '杀手选择目标 → 攻击记录在案（结算阶段统一处理）',
-    settlement2: '结算所有攻击：有功夫则反弹攻击者，无功夫则目标死亡',
-    move2: '主持人操控所有存活玩家移动（最后一轮移动）',
-    investigate3: '告知各玩家其所在地点的其他玩家',
-    action3: '杀手选择目标 → 攻击记录在案（结算阶段统一处理）',
-    settlement3: '结算所有攻击：有功夫则反弹攻击者，无功夫则目标死亡',
-    move4: '主持人操控所有存活玩家移动（第四轮移动）',
-    investigate4: '告知各玩家其所在地点的其他玩家',
-    action4: '杀手选择目标 → 攻击记录在案（结算阶段统一处理）',
-    settlement4: '结算所有攻击：有功夫则反弹攻击者，无功夫则目标死亡',
-    shrine_vision: '凌宇神社中速度最高的人可选择一个地点，查看本轮经过该地点的人员名单',
-    death_report: '展示本轮所有死亡角色，封锁死亡地点',
-    speak: '存活玩家依次发言',
-    vote: '主持人记录投票并标记出局玩家',
-    end: '游戏已结束，显示胜利方',
+    identity: '查看并分配身份给各玩家',
+    start: '将所有玩家放置到地图上',
+    action1: '杀手选择目标发起攻击',
+    move1: '存活玩家移动到相邻地点',
+    action2: '杀手选择目标发起攻击',
+    move2: '存活玩家移动到相邻地点',
+    action3: '杀手选择目标发起攻击',
+    move3: '存活玩家移动到相邻地点',
+    action4: '杀手选择目标发起攻击',
+    move4: '存活玩家移动到相邻地点',
+    death_report: '展示本轮所有死亡角色',
+    vote: '存活玩家投票淘汰',
+    vote_result: '公示投票结果',
+    end: '游戏已结束',
   };
   return descriptions[phase] || '';
 }
@@ -266,38 +242,27 @@ export function getPhaseActionHint(phase: GamePhase): string {
     case 'setup':
       return '配置玩家、身份数量和地图布局';
     case 'identity':
-      return '向每位玩家私下告知其身份，确认后进入下一步';
+      return '向每位玩家告知其身份';
     case 'start':
-      return '将所有玩家拖动放置到地图上的起始位置';
-    case 'investigate1':
-    case 'investigate2':
-    case 'investigate3':
-    case 'investigate4':
-      return '告知每位玩家：其所在地点还有哪些玩家';
+      return '将所有玩家放置到地图上的起始位置';
     case 'action1':
     case 'action2':
     case 'action3':
     case 'action4':
-      return '选择目标发起攻击 → 攻击被记录在案，结算阶段统一处理伤害';
-    case 'settlement1':
-    case 'settlement2':
-    case 'settlement3':
-    case 'settlement4':
-      return '统一结算所有攻击：有功夫则反弹攻击者，无功夫则目标死亡';
-    case 'shrine_vision':
-      return '选择地点查看本轮经过该地点的人员名单';
-    case 'death_report':
-      return '查看本轮死亡角色列表，死亡地点将被统一封锁';
+      return '选择目标发起攻击';
     case 'move1':
     case 'move2':
+    case 'move3':
     case 'move4':
-      return '存活玩家依次移动（每人最多两步）';
-    case 'speak':
-      return '按顺序让存活玩家依次发言讨论';
+      return '选择一个相邻地点进行移动';
+    case 'death_report':
+      return '查看本轮死亡角色';
     case 'vote':
-      return '存活玩家投票 → 主持人选择得票最多的玩家标记出局（不封锁地点）';
+      return '选择投票目标，确认后票数最高者出局';
+    case 'vote_result':
+      return '查看投票结果';
     case 'end':
-      return '游戏结束，展示胜利方';
+      return '游戏结束';
     default:
       return '';
   }
