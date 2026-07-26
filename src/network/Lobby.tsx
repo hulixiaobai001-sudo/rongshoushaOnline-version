@@ -54,10 +54,9 @@ function RoleAssignmentPanel() {
         </button>
         {expanded && (
           <div className="mt-2 space-y-1.5 max-h-[200px] overflow-auto">
-            {players.map((p: any, i: number) => {
+            {players.map((p: any) => {
               const curIdentity = editIdentity[p.id] || p.identity
               const curHero = editHero[p.id] || p.heroId
-              const heroName = curHero ? ({ xiling: '西凌', kexiong: '科雄', niangao: '年糕', lilongxiang: '李龙祥', zhuxun: '竹隼', zhangyang: '张扬', fengming: '冯明', wangli: '王力', yeyu: '夜羽', baiye: '白野', tianyi: '天燚', jiangfeng: '江枫' } as Record<string, string>)[curHero] || curHero : '未分配'
               return (
                 <div key={p.id} className="flex items-center gap-1.5 bg-slate-900/50 rounded px-2 py-1.5">
                   <span className="text-xs text-slate-300 w-16 truncate shrink-0">{p.name}</span>
