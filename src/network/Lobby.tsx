@@ -284,16 +284,16 @@ export function Lobby({ onBack }: LobbyProps) {
               </div>
 
               {/* 房间可见性（开发中） */}
-              <div className=\"flex items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 opacity-60\"
-                title=\"联机大厅功能开发中，当前房间通过房间码加入\">
-                <span className=\"text-sm text-slate-400 shrink-0\">🔒 房间</span>
-                <div className=\"flex-1\" />
-                <div className=\"flex gap-1 bg-slate-900 rounded-lg p-0.5\">
-                  <button className=\"px-3 py-1 rounded-md text-xs text-slate-500\">公开</button>
-                  <button className=\"px-3 py-1 rounded-md text-xs bg-slate-800 text-slate-600\">私密</button>
+              <div className="flex items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 opacity-60"
+                title="联机大厅功能开发中，当前房间通过房间码加入">
+                <span className="text-sm text-slate-400 shrink-0">🔒 房间</span>
+                <div className="flex-1" />
+                <div className="flex gap-1 bg-slate-900 rounded-lg p-0.5">
+                  <button className="px-3 py-1 rounded-md text-xs text-slate-500">公开</button>
+                  <button className="px-3 py-1 rounded-md text-xs bg-slate-800 text-slate-600">私密</button>
                 </div>
               </div>
-              <div className=\"bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2 text-[10px] text-amber-400/70 text-center\">
+              <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2 text-[10px] text-amber-400/70 text-center">
                 ⚠️ 联机大厅开发中，当前通过房间码加入游戏
               </div>
 
