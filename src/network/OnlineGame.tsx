@@ -178,7 +178,10 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
 
       // 传送：可到达任意地点
       const isTeleport = currentPlayer.teleportReady
-      if (!isTeleport && !currentLoc.connectedTo.includes(locId)) {
+      // 志成桥：允许前往 extraDestinations
+      const bridgeDests = currentLoc.effect?.type === 'bridge_jump' ? (currentLoc.effect.extraDestinations || []) : []
+      const canReachViaBridge = bridgeDests.includes(targetLoc.name)
+      if (!isTeleport && !canReachViaBridge && !currentLoc.connectedTo.includes(locId)) {
         info('无法到达', `从 ${currentLoc.name} 无法到达 ${targetLoc.name}`)
         return
       }
