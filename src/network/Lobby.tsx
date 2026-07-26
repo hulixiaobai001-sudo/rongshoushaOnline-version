@@ -6,12 +6,55 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye, Bug } from 'lucide-react'
 import { OnlineGame } from './OnlineGame'
+import { useGameStore } from '@/store/gameStore'
 
 interface LobbyProps {
   onBack: () => void
 }
 
 const DEBUG_PHRASE = '柯基不爱喝茶'
+
+
+// ═══════════════════════════════════════════════════
+//  调试模式设置组件
+// ═══════════════════════════════════════════════════
+function DebugSettings() {
+  const store = useGameStore()
+  const killerCount = store.killerCount
+  const civilianCount = store.civilianCount
+
+  return (
+    <Card className="bg-slate-800 border-amber-700">
+      <CardContent className="p-3 space-y-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Bug className="w-4 h-4 text-amber-400" />
+          <span className="text-xs font-bold text-amber-400">调试设置</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-300">杀手人数</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => store.setKillerCount(Math.max(1, killerCount - 1))}
+              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">-</button>
+            <span className="w-8 text-center text-sm font-bold text-white">{killerCount}</span>
+            <button onClick={() => store.setKillerCount(Math.min(4, killerCount + 1))}
+              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">+</button>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-300">平民人数</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => store.setCivilianCount(Math.max(2, civilianCount - 1))}
+              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">-</button>
+            <span className="w-8 text-center text-sm font-bold text-white">{civilianCount}</span>
+            <button onClick={() => store.setCivilianCount(Math.min(10, civilianCount + 1))}
+              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">+</button>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-500">总计：{killerCount + civilianCount} 名玩家</p>
+      </CardContent>
+    </Card>
+  )
+}
 
 export function Lobby({ onBack }: LobbyProps) {
   const [mode, setMode] = useState<'host' | 'join' | null>(null)
@@ -194,6 +237,16 @@ export function Lobby({ onBack }: LobbyProps) {
                 <p className="text-xs text-slate-400 mt-1">通过 WiFi 进行 P2P 直连，无需服务器</p>
               </div>
 
+              {/* 房间可见性切换 */}
+              <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-3 border border-slate-700">
+                <span className="text-sm text-slate-300 shrink-0">🔒 房间</span>
+                <div className="flex-1" />
+                <div className="flex gap-1 bg-slate-900 rounded-lg p-0.5">
+                  <button className="px-3 py-1 rounded-md text-xs">公开</button>
+                  <button className="px-3 py-1 rounded-md text-xs bg-slate-700 text-slate-400">私密</button>
+                </div>
+              </div>
+
               <Button onClick={handleCreateRoom} disabled={loading}
                 className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
                 {loading ? '创建中...' : '创建房间（房主）'}
@@ -295,6 +348,11 @@ export function Lobby({ onBack }: LobbyProps) {
                   )}
                 </CardContent>
               </Card>
+
+              {/* 调试模式设置 */}
+              {debugMode && (
+                <DebugSettings />
+              )}
 
               {/* 调试模式按钮 */}
               {debugMode && !players.some(p => p.startsWith('bot_')) && (

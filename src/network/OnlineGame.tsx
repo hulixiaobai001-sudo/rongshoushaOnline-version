@@ -79,6 +79,10 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const [selectedSkill, setSelectedSkill] = useState<HeroSkill | null>(null)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
+  const [hasMoved, setHasMoved] = useState(false)
+
+  // 阶段变更时重置移动状态
+  useEffect(() => { setHasMoved(false) }, [phase])
 
   // 当前玩家（开发阶段固定为 players[0]）
   const currentPlayer = players[0]
@@ -138,6 +142,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const handleMoveClick = () => {
     if (!isMovePhase) { info('不在移动阶段', '当前不是移动阶段，无法移动'); return }
     if (!currentPlayer) return
+    if (hasMoved) { info('已移动过', '本回合你已经移动过了'); return }
     if (reachableLocations.length === 0) { info('无处可去', '当前地点没有相连的道路'); return }
     setInteraction('moving')
     setSkillsOpen(false)
@@ -164,6 +169,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       confirm(`移动到 ${targetLoc.name}？`, () => {
         movePlayer(currentPlayer.id, locId)
         setSelectedLocationId(locId)
+        setHasMoved(true)
         resetInteraction()
         info('移动完成', `已到达 ${targetLoc.name}`)
       })
@@ -516,12 +522,12 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
                       stroke={isCurrentLoc ? '#818cf8' : isSelected ? '#f59e0b' : isReachable ? '#818cf8' : isTargetingMode ? '#f59e0b' : '#475569'}
                       strokeWidth={isCurrentLoc || isSelected || isReachable || isTargetingMode ? '1.5' : '0.8'}
                     />
-                    {/* 地点名称 */}
+                    {/* 地点名称（全称） */}
                     <text x={loc.x} y={loc.y + 9} textAnchor="middle"
-                      fontSize="3" fill={isCurrentLoc ? '#c7d2fe' : '#94a3b8'}
+                      fontSize="2.8" fill={isCurrentLoc ? '#c7d2fe' : '#94a3b8'}
                       fontWeight={isCurrentLoc ? '700' : '500'}
                       style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                      {loc.name.length > 5 ? loc.name.slice(0, 5) + '..' : loc.name}
+                      {loc.name}
                     </text>
                     {/* 地点效果标记 */}
                     {loc.effect && loc.effect.type !== 'placeholder' && (
@@ -660,7 +666,14 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       {/* ═══ 底部操作栏 ═══ */}
       <footer className="shrink-0 border-t border-slate-700 bg-slate-800/90">
         <div className="flex items-center gap-2 px-3 py-2">
-          {/* 左：技能区（移动阶段技能 + 可用技能） */}
+          {/* 左：身份查看按钮 */}
+          {currentPlayer && !isGameOver && (
+            <button onClick={() => info('你的身份', currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民')}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-slate-700/60 text-slate-300 hover:bg-slate-600 border border-slate-600 transition-colors shrink-0">
+              👤 身份
+            </button>
+          )}
+          {/* 左：技能区 */}
           <div className="flex-1 min-w-0">
             {availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
               <div className="flex flex-wrap items-center gap-1">
@@ -692,24 +705,34 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
           </div>
 
           {/* 中：移动按钮 */}
-          {isMovePhase && !isMoveMode && !isTargetingMode && (
-            <button onClick={handleMoveClick}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium transition-colors">
+          {isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
+            <button onClick={handleMoveClick} disabled={hasMoved}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
+                hasMoved
+                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : 'bg-emerald-700 hover:bg-emerald-600 text-white'
+              }`}>
               <Footprints className="w-3.5 h-3.5" />
-              移动
+              {hasMoved ? '已移动' : '移动'}
             </button>
           )}
 
-          {/* 右：准备按钮 */}
-          <button onClick={handleReady}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0
-              ${isGameOver
-                ? 'bg-slate-600 hover:bg-slate-500 text-white'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-              }`}>
-            <Check className="w-3.5 h-3.5" />
-            {isGameOver ? '返回大厅' : '准备'}
-          </button>
+          {/* 右：准备按钮（仅在行动/移动阶段显示） */}
+          {!isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
+            <button onClick={handleReady}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white">
+              <Check className="w-3.5 h-3.5" />
+              准备
+            </button>
+          )}
+
+          {/* 游戏结束 */}
+          {isGameOver && (
+            <button onClick={handleReady}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 bg-slate-600 hover:bg-slate-500 text-white">
+              返回大厅
+            </button>
+          )}
         </div>
       </footer>
 
