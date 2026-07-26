@@ -756,6 +756,10 @@ ${skill.description}`)
                     {/* 同地点存活玩家 */}
                     {infoLocation.id === currentPlayer?.locationId && infoPlayers.filter(p => p.id !== currentPlayer?.id).length > 0 && (
                       <div className="flex flex-wrap items-center gap-1 mt-1">
+                        {infoLocation.effect?.type === 'crowded' && currentPlayer?.identity === 'civilian' ? (
+                          <span className="text-[9px] text-slate-500">🛍️ 商业街人头攒动，看不清周围</span>
+                        ) : (
+                          <>
                         <span className="text-[9px] text-emerald-400">●</span>
                         {infoPlayers.filter(p => p.id !== currentPlayer?.id).map(p => {
                           const pHero = p.heroId ? getHeroById(p.heroId) : null
@@ -766,17 +770,26 @@ ${skill.description}`)
                             </span>
                           )
                         })}
+                          </>
+                        )}
                       </div>
                     )}
-                    {/* 当前地点的尸体 */}
+                    {/* 同地点尸体 */}
                     {infoLocation.id === currentPlayer?.locationId && deadPlayers.filter(p => p.locationId === infoLocation.id).length > 0 && (
                       <div className="flex flex-wrap items-center gap-1 mt-1">
+                        {infoLocation.effect?.type === 'crowded' && currentPlayer?.identity === 'civilian' ? (
+                          <span className="text-[9px] text-slate-500">🛍️ 商业街人头攒动，看不清尸体</span>
+                        ) : (
+                          <>
                         <span className="text-[9px] text-red-400">✕</span>
                         {deadPlayers.filter(p => p.locationId === infoLocation.id).map(p => (
                           <span key={p.id} className="text-[10px] text-red-400/70">{p.name}</span>
                         ))}
+                          </>
+                        )}
                       </div>
                     )}
+
                     {infoLocation.id !== currentPlayer?.locationId && (
                       <p className="text-[10px] text-slate-500 mt-0.5">🔒 未知</p>
                     )}

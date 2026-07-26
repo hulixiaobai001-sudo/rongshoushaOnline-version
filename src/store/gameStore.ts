@@ -483,6 +483,20 @@ export const useGameStore = create<GameStore>()(
 
         // vote_result → 回到 action1，轮次+1
         if (state.phase === 'vote_result') {
+          // 凌宇神社：公示经过记录
+          const shrineLoc = state.locations.find(l => l.effect?.type === 'shrine_vision');
+          if (shrineLoc) {
+            const visits = state.locationVisits[shrineLoc.id] || [];
+            const names = visits.map(id => state.players.find(p => p.id === id)).filter(Boolean).map(p => p!.name);
+            if (names.length > 0) state.events.push({
+              id: generateId('evt'), round: state.round, phase: 'vote_result',
+              timestamp: Date.now(), type: 'info',
+              description: '【凌宇神社·神视】本轮经过人员：' + names.join('、'),
+            });
+          }
+          // 屠城结算
+          checkGameEnd(state);
+          if (state.phase === 'end') return;
           state.round++;
           state.roundSkillUsage = {};
           state.blockedLocations = [];
@@ -562,8 +576,23 @@ export const useGameStore = create<GameStore>()(
         }
         const toLoc = state.locations.find((l) => l.id === locationId);
         const fromLoc = state.locations.find((l) => l.id === player.locationId);
+        // 志成桥单向检查
+        if (fromLoc?.effect?.type === 'bridge_jump') {
+          const canGo = fromLoc.effect?.extraDestinations || [];
+          if (!fromLoc.connectedTo.includes(locationId) && !canGo.includes(toLoc?.name || '')) {
+            state.events.push({
+              id: generateId('evt'), round: state.round, phase: state.phase,
+              timestamp: Date.now(), type: 'info', locationId: player.locationId,
+              description: '【志成桥·单向】此路不通',
+            });
+            return;
+          }
+        }
         player.locationId = locationId;
-        // 追踪记录：如果该玩家是被追踪目标
+        // 地点经过记录
+        if (!state.locationVisits[locationId]) state.locationVisits[locationId] = [];
+        if (!state.locationVisits[locationId].includes(playerId)) state.locationVisits[locationId].push(playerId);
+        // 追踪记录
         if (state.trackedPlayerId === playerId) {
           state.trackRecords.push({
             round: state.round, phase: state.phase,
