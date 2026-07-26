@@ -22,42 +22,71 @@ function RoleAssignmentPanel() {
   const store = useGameStore()
   const [expanded, setExpanded] = useState(false)
   const players = store.players
-  
-  // 手动设置身份
-  const setIdentity = (playerId: string, identity: 'killer' | 'civilian') => {
-    // Direct store mutation won't work with immer, need to use store action
-    // Instead, we'll modify the playerCount settings
-    window.alert('身份分配功能开发中，当前使用系统自动分配')
-  }
+  const [editIdentity, setEditIdentity] = useState<Record<string, 'killer' | 'civilian'>>({})
+  const [editHero, setEditHero] = useState<Record<string, string>>({})
 
   if (players.length === 0) return null
+
+  const toggleIdentity = (playerId: string) => {
+    const current = editIdentity[playerId] || players.find((p: any) => p.id === playerId)?.identity || 'civilian'
+    const newId = current === 'killer' ? 'civilian' : 'killer'
+    setEditIdentity({ ...editIdentity, [playerId]: newId })
+    // 直接修改store中的玩家身份
+    const player = players.find((p: any) => p.id === playerId)
+    if (player) player.identity = newId
+  }
+
+  const setPlayerHero = (playerId: string, heroId: string) => {
+    setEditHero({ ...editHero, [playerId]: heroId })
+    const player = players.find((p: any) => p.id === playerId)
+    if (player) player.heroId = heroId
+  }
+
+  const totalKillers = players.filter((p: any) => (editIdentity[p.id] || p.identity) === 'killer').length
 
   return (
     <Card className="bg-slate-800 border-indigo-700">
       <CardContent className="p-3">
         <button onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-between text-xs font-bold text-indigo-400">
-          <span>🎭 角色分配（{players.length}人）</span>
+          <span>🎭 角色分配（杀手 {totalKillers}人 / 平民 {players.length - totalKillers}人）</span>
           <span>{expanded ? '收起' : '展开'}</span>
         </button>
         {expanded && (
-          <div className="mt-2 space-y-1.5">
-            {players.map((p: any, i: number) => (
-              <div key={p.id} className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1.5">
-                <span className="text-xs text-slate-300">{i + 1}. {p.name}</span>
-                <div className="flex gap-1">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.identity === 'killer' ? 'bg-red-900/40 text-red-400' : 'bg-blue-900/40 text-blue-400'}`}>
-                    {p.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}
-                  </span>
-                  {p.heroId && (
-                    <span className="text-[10px] text-slate-500">
-                      {(() => { try { const h = JSON.parse(JSON.stringify(require)); return '' } catch(e) { return '' } })()}
-                    </span>
-                  )}
+          <div className="mt-2 space-y-1.5 max-h-[200px] overflow-auto">
+            {players.map((p: any, i: number) => {
+              const curIdentity = editIdentity[p.id] || p.identity
+              const curHero = editHero[p.id] || p.heroId
+              const heroName = curHero ? ({ xiling: '西凌', kexiong: '科雄', niangao: '年糕', lilongxiang: '李龙祥', zhuxun: '竹隼', zhangyang: '张扬', fengming: '冯明', wangli: '王力', yeyu: '夜羽', baiye: '白野', tianyi: '天燚', jiangfeng: '江枫' } as Record<string, string>)[curHero] || curHero : '未分配'
+              return (
+                <div key={p.id} className="flex items-center gap-1.5 bg-slate-900/50 rounded px-2 py-1.5">
+                  <span className="text-xs text-slate-300 w-16 truncate shrink-0">{p.name}</span>
+                  <button onClick={() => toggleIdentity(p.id)}
+                    className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                      curIdentity === 'killer' ? 'bg-red-900/60 text-red-300' : 'bg-blue-900/60 text-blue-300'
+                    }`}>
+                    {curIdentity === 'killer' ? '🔴杀手' : '🔵平民'}
+                  </button>
+                  <select value={curHero} onChange={(e) => setPlayerHero(p.id, e.target.value)}
+                    className="flex-1 text-[9px] bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-slate-300 min-w-0">
+                    <option value="">随机英雄</option>
+                    <option value="xiling">西凌</option>
+                    <option value="kexiong">科雄</option>
+                    <option value="niangao">年糕</option>
+                    <option value="lilongxiang">李龙祥</option>
+                    <option value="zhuxun">竹隼</option>
+                    <option value="zhangyang">张扬</option>
+                    <option value="fengming">冯明</option>
+                    <option value="wangli">王力</option>
+                    <option value="yeyu">夜羽</option>
+                    <option value="baiye">白野</option>
+                    <option value="tianyi">天燚</option>
+                    <option value="jiangfeng">江枫</option>
+                  </select>
                 </div>
-              </div>
-            ))}
-            <p className="text-[9px] text-slate-500 text-center pt-1">系统已自动分配身份和英雄，开局后可在游戏中查看</p>
+              )
+            })}
+            <p className="text-[9px] text-slate-500 text-center pt-1">点击身份切换 🔴杀手/🔵平民，下拉选择英雄</p>
           </div>
         )}
       </CardContent>

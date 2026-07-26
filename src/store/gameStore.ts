@@ -388,12 +388,12 @@ export const useGameStore = create<GameStore>()(
 
     assignIdentities: () =>
       set((state) => {
+        // 检查是否有玩家已手动分配身份
+        const hasManual = state.players.some(p => p.identity === 'killer' || p.identity === 'civilian');
+        if (hasManual) { state.phase = 'identity'; return; }
         const totalPlayers = state.players.length;
         if (totalPlayers === 0) return;
-        // 动态计算杀手数量：每4人1杀手，至少1个，最多不超过总人数1/3
-        // 50%概率杀手，最少1人最多不超过半数
-        const maxK = Math.floor(totalPlayers / 2);
-        const dynamicKillers = Math.max(1, Math.min(Math.floor(totalPlayers / 2), maxK));
+        const dynamicKillers = Math.max(1, Math.floor(totalPlayers / 2));
         const dynamicCivilians = totalPlayers - dynamicKillers;
         const identities: Identity[] = [];
         for (let i = 0; i < dynamicKillers; i++) identities.push('killer');
@@ -423,6 +423,9 @@ export const useGameStore = create<GameStore>()(
     assignHeroes: () =>
       set((state) => {
         if (!state.heroPoolEnabled) return;
+        // 如果有玩家已分配英雄（管理员模式），跳过
+        const hasManual = state.players.some(p => p.heroId && p.heroId !== '');
+        if (hasManual) return;
         // 使用英雄池1.1
         const pool = [...HERO_POOL_V1_1_IDS];
         // Fisher-Yates 随机打乱
