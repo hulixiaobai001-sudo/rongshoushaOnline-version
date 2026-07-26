@@ -523,6 +523,17 @@ export const useGameStore = create<GameStore>()(
         if (next.startsWith('action')) {
           state.kungFuActivePlayers = [];
         }
+        // 追踪记录：记录被追踪玩家的阶段变化
+        if (state.trackedPlayerId && (next.startsWith('action') || next.startsWith('move'))) {
+          const tracked = state.players.find(p => p.id === state.trackedPlayerId);
+          if (tracked && tracked.status === 'alive') {
+            state.trackRecords.push({
+              round: state.round, phase: state.phase,
+              action: '进入' + getPhaseName(next),
+              locationId: tracked.locationId,
+            });
+          }
+        }
 
         state.phase = next;
         state.events.push({
@@ -550,7 +561,16 @@ export const useGameStore = create<GameStore>()(
           return;
         }
         const toLoc = state.locations.find((l) => l.id === locationId);
+        const fromLoc = state.locations.find((l) => l.id === player.locationId);
         player.locationId = locationId;
+        // 追踪记录：如果该玩家是被追踪目标
+        if (state.trackedPlayerId === playerId) {
+          state.trackRecords.push({
+            round: state.round, phase: state.phase,
+            action: '移动',
+            locationId: locationId,
+          });
+        }
         // 阿萨姆疯人院【癫狂】效果：每次进入时疯人院攻击次数+1
         if (toLoc?.effect?.type === 'asylum_extra_attack' && player.identity === 'killer') {
           player.asylumAttackRemaining += 1;
@@ -637,6 +657,10 @@ export const useGameStore = create<GameStore>()(
           playerId: target.id,
           description: `${target.name}（${target.identity === 'killer' ? '杀手' : '平民'}）在${targetLoc ? targetLoc.name : ''}被 ${attacker.name} 击杀`,
         });
+        // 追踪记录：如果目标是被追踪玩家
+        if (state.trackedPlayerId === targetId) {
+          state.trackRecords.push({ round: state.round, phase: state.phase, action: '被击杀', locationId: target.locationId });
+        }
 
         // ── 地点效果：疾控中心（平民死亡→变为杀手）──
         if (targetLoc?.effect?.type === 'identity_transform' && target.identity === 'civilian') {

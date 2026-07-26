@@ -880,6 +880,7 @@ ${skill.description}`)
 //  信息面板（右栏：追踪/无人机/记录本）
 // ═══════════════════════════════════════════════════
 function InfoPanel({ store, players }: { store: any; players: any[] }) {
+  const [showTrack, setShowTrack] = useState(false)
   const { trackRecords, trackedPlayerId, droneLocationId, locations } = store
   const trackedPlayer = players.find((p: any) => p.id === trackedPlayerId)
   const droneLoc = locations?.find((l: any) => l.id === droneLocationId)
@@ -890,9 +891,36 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
       {trackedPlayer && trackRecords && trackRecords.length > 0 && (
         <div>
           <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}</p>
-          {trackRecords.slice(-3).map((r: any, i: number) => (
-            <p key={i} className="text-[8px] text-slate-400">{r.action}</p>
-          ))}
+          <p className="text-[8px] text-slate-400">{trackRecords.length} 条记录</p>
+          <button onClick={() => setShowTrack(true)}
+            className="text-[8px] text-amber-500 hover:text-amber-400 underline mt-0.5">
+            查看详细追踪报告 &gt;
+          </button>
+        </div>
+      )}
+      {/* 追踪报告弹窗 */}
+      {showTrack && trackedPlayer && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowTrack(false)}>
+          <div className="bg-slate-800 border border-amber-700/50 rounded-xl p-4 w-full max-w-sm max-h-[60vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-amber-400">📡 追踪报告 — {trackedPlayer.name}</h3>
+              <button onClick={() => setShowTrack(false)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-1.5">
+              {trackRecords.map((r: any, i: number) => {
+                const loc = locations?.find((l: any) => l.id === r.locationId)
+                return (
+                  <div key={i} className="flex items-start gap-2 text-[10px] bg-slate-900/50 rounded p-1.5">
+                    <span className="text-slate-500 shrink-0 font-mono">#{i + 1}</span>
+                    <div>
+                      <p className="text-slate-300">{r.action}</p>
+                      {loc && <p className="text-slate-500">📍 {loc.name}</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       )}
       {/* 无人机信息 */}
