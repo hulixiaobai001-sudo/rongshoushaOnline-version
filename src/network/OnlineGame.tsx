@@ -426,7 +426,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
-            players={players} currentPlayer={currentPlayer} hero={hero}
+            currentPlayer={currentPlayer} hero={hero}
             alivePlayers={alivePlayers}
             usedSkills={usedSkills}
             store={store}
@@ -704,8 +704,8 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 // ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
-function VoteSection({ players, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
-  players: any[]; currentPlayer: any; hero: any;
+function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
+  currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
   store: any; onNextPhase: () => void;
 }) {

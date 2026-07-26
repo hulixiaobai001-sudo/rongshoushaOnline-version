@@ -134,16 +134,12 @@ export function GamePlay() {
         <Card className="w-full lg:w-[400px] shrink-0 flex flex-col min-h-0 max-h-[50vh] lg:max-h-none">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="flex items-center gap-2 text-sm">
-              {phase === 'shrine_vision' ? (
-                <><Eye className="w-4 h-4 text-purple-600" />凌宇神社 - 神视</>
-              ) : (
-                <><Users className="w-4 h-4 text-indigo-600" />角色操作面板</>
-              )}
+              <><Users className="w-4 h-4 text-indigo-600" />角色操作面板</>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 p-0 overflow-auto">
-            {phase === 'shrine_vision' ? (
-              <ShrineVisionPanel />
+            {false ? (
+              <div />
             ) : (
               <div className="px-3 md:px-4 pb-4 space-y-3">
                 {players.map((player, index) => (

@@ -1078,33 +1078,7 @@ function handleSettlement(state: GameState) {
     return;
   }
 
-  // 5. 凌宇神社效果检查（仅 settlement4）
-  if (state.phase === 'settlement4') {
-    const shrineLoc = state.locations.find((l) => l.effect?.type === 'shrine_vision');
-    if (shrineLoc) {
-      // 找到凌宇神社中速度最高的存活玩家
-      const shrinePlayers = state.players.filter(
-        (p) => p.status === 'alive' && p.locationId === shrineLoc.id
-      );
-      if (shrinePlayers.length > 0) {
-        // 按速度降序排列，取第一个（速度最高）
-        const speedMap: Record<string, number> = { xiling: 100, lilongxiang: 2, kexiong: 1, niangao: 0 };
-        shrinePlayers.sort((a, b) => (speedMap[b.heroId] || 0) - (speedMap[a.heroId] || 0));
-        const fastestPlayer = shrinePlayers[0];
-        state.shrineVisionActive = true;
-        state.shrineVisionPlayerId = fastestPlayer.id;
-        state.phase = 'shrine_vision';
-        state.events.push({
-          id: generateId('evt'), round: state.round, phase: 'shrine_vision',
-          timestamp: Date.now(), type: 'phase_change',
-          description: `【凌宇神社】${fastestPlayer.name}（速度${speedMap[fastestPlayer.heroId] || 0}）获得神视能力，可选择一个地点查看本轮经过人员`,
-        });
-        return;
-      }
-    }
-  }
-
-  // 6. 继续下一阶段
+  // 5. 继续下一阶段
   const next = getNextPhase(state.phase);
   state.phase = next;
   state.events.push({
