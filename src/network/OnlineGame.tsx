@@ -156,8 +156,9 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const handleMoveClick = () => {
     if (!isMovePhase) { info('不在移动阶段', '当前不是移动阶段，无法移动'); return }
     if (!currentPlayer) return
-    if (hasMoved) { info('已移动过', '本回合你已经移动过了'); return }
-    if (reachableLocations.length === 0) { info('无处可去', '当前地点没有相连的道路'); return }
+    // 疾行状态下允许第二次移动
+    if (hasMoved && !currentPlayer.doubleMoveActive) { info('已移动过', '本回合你已经移动过了'); return }
+    if (!hasMoved && reachableLocations.length === 0) { info('无处可去', '当前地点没有相连的道路'); return }
     setInteraction('moving')
     setSkillsOpen(false)
   }
@@ -175,17 +176,26 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
       const targetLoc = locations.find(l => l.id === locId)
       if (!currentLoc || !targetLoc) return
 
-      if (!currentLoc.connectedTo.includes(locId)) {
+      // 传送：可到达任意地点
+      const isTeleport = currentPlayer.teleportReady
+      if (!isTeleport && !currentLoc.connectedTo.includes(locId)) {
         info('无法到达', `从 ${currentLoc.name} 无法到达 ${targetLoc.name}`)
         return
       }
 
-      confirm(`移动到 ${targetLoc.name}？`, () => {
+      confirm(`移动到 ${targetLoc.name}？${isTeleport ? ' (传送)' : ''}`, () => {
         movePlayer(currentPlayer.id, locId)
         setSelectedLocationId(locId)
-        setHasMoved(true)
-        resetInteraction()
-        info('移动完成', `已到达 ${targetLoc.name}`)
+        // 疾行：第一次移动后不锁，第二次才锁
+        if (currentPlayer.doubleMoveActive && !currentPlayer.doubleMoveFirstDone) {
+          // 第一次移动，疾行状态下不锁
+          resetInteraction()
+          info('疾行·第一次移动', `已到达 ${targetLoc.name}，还可再移动一次`)
+        } else {
+          setHasMoved(true)
+          resetInteraction()
+          info('移动完成', `已到达 ${targetLoc.name}`)
+        }
       })
       return
     }
@@ -881,14 +891,20 @@ ${skill.description}`)
 
           {/* 中：移动按钮 */}
           {isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
-            <button onClick={handleMoveClick} disabled={hasMoved}
+            <button onClick={handleMoveClick}
+              disabled={hasMoved && !currentPlayer?.doubleMoveActive}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                hasMoved
+                hasMoved && !currentPlayer?.doubleMoveActive
                   ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  : 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                  : hasMoved && currentPlayer?.doubleMoveActive
+                    ? 'bg-cyan-700 hover:bg-cyan-600 text-white'
+                    : 'bg-emerald-700 hover:bg-emerald-600 text-white'
               }`}>
               <Footprints className="w-3.5 h-3.5" />
-              {hasMoved ? '已移动' : '移动'}
+              {hasMoved && !currentPlayer?.doubleMoveActive ? '已移动'
+                : hasMoved && currentPlayer?.doubleMoveActive ? '移动(2/2)'
+                : currentPlayer?.doubleMoveActive ? '移动(1/2)'
+                : '移动'}
             </button>
           )}
 
