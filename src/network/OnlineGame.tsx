@@ -716,8 +716,33 @@ ${skill.description}`)
         {/* ═══ 底部双栏面板 ═══ */}
         <div className="shrink-0 bg-slate-800/60 border-t border-slate-700">
           <div className="flex gap-0">
-            {/* 左栏：地点信息+同地点玩家+尸体 */}
+            {/* 左栏：状态+地点信息+同地点玩家+尸体 */}
             <div className="flex-1 px-3 py-2 min-w-0 border-r border-slate-700/50">
+              {/* 状态效果显示 */}
+              {currentPlayer && (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {currentPlayer.halted && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-400 border border-red-800/50">
+                      🚫 停步
+                    </span>
+                  )}
+                  {store.kungFuActivePlayers?.includes(currentPlayer.id) && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-800/50">
+                      🥟 功夫
+                    </span>
+                  )}
+                  {currentPlayer.teleportReady && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-400 border border-purple-800/50">
+                      ✨ 传送
+                    </span>
+                  )}
+                  {currentPlayer.doubleMoveActive && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-900/40 text-cyan-400 border border-cyan-800/50">
+                      🏃 疾行
+                    </span>
+                  )}
+                </div>
+              )}
               {infoLocation ? (
                 <div className="flex items-start gap-2">
                   <div className="w-7 h-7 rounded-lg bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center shrink-0">
@@ -1080,18 +1105,33 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
 
   // 胜利界面
   if (winner) {
+    // 统计存活玩家信息
+    const aliveKillers = players.filter((p: any) => p.status === 'alive' && p.identity === 'killer')
+    const aliveCivs = players.filter((p: any) => p.status === 'alive' && p.identity === 'civilian')
+    const winnerPlayers = winner === 'good' ? aliveCivs : aliveKillers
+    const winnerSide = winner === 'good' ? '好人阵营' : '杀手阵营'
+    const winnerIcon = winner === 'good' ? '👑' : '🗡️'
+    
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4">
-        <div className="text-6xl">{winner === 'good' ? '👑' : '🗡️'}</div>
-        <h2 className="text-xl font-bold text-white">
-          {winner === 'good' ? '好人阵营胜利！' : '杀手阵营胜利！'}
-        </h2>
-        <p className="text-sm text-slate-400">
-          {winner === 'good' ? '所有杀手已被消灭' : '平民已被全部消灭（屠城）'}
-        </p>
-        <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 bg-gradient-to-b from-slate-900 via-indigo-950/30 to-slate-900">
+        <div className="text-7xl mb-2 animate-pulse">{winnerIcon}</div>
+        <h2 className="text-2xl font-bold text-white">{winnerSide} 胜利！</h2>
+        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-6 py-3 text-center max-w-xs">
+          <p className="text-sm text-slate-300">
+            {winner === 'good' ? '🔴 所有杀手已被绳之以法' : '🔵 平民已被全部消灭'}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            存活 {alivePlayers.length} / {players.length}
+          </p>
+        </div>
+        <div className="text-xs text-slate-400 text-center max-w-xs">
+          {winnerPlayers.map((p: any) => (
+            <span key={p.id} className="inline-block mx-1">{p.name}</span>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-600">游戏结束</div>
         <button onClick={onNextPhase}
-          className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors">
+          className="mt-2 px-8 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-sm font-bold text-white transition-all shadow-lg shadow-indigo-900/30">
           返回大厅
         </button>
       </div>
@@ -1317,7 +1357,7 @@ function PopupOverlay({
             <div className="space-y-3 text-sm text-slate-300">
               <div className="flex items-center justify-between">
                 <span>音效</span>
-                <span className="text-slate-500 text-xs">开发中</span>
+                <span className="text-slate-500 text-xs">MVP</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>版本</span>
