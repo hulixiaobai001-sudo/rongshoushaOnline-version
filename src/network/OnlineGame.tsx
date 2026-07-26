@@ -105,13 +105,12 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
 
-  // ── 加载完成 ──
+  // ── 加载完成（无论什么模式，最多等3秒） ──
   useEffect(() => {
-    if (loading && debugMode) {
-      const t = setTimeout(() => setLoading(false), 1200)
-      return () => clearTimeout(t)
-    }
-  }, [loading, debugMode])
+    if (!loading) return
+    const t = setTimeout(() => setLoading(false), 3000)
+    return () => clearTimeout(t)
+  }, [loading])
 
   // ── 点击的地点信息 ──
   const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
