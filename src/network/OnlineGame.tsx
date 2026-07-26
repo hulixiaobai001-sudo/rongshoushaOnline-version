@@ -298,13 +298,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       // ═══════════════════════════════════════════
       case 'niangao_kungfu':
         activateKungFu(playerId)
-        info('🥟 功夫已激活', 
-          '本行动阶段内，若有玩家在同一个地点攻击你，
-' +
-          '你会自动反杀对方！
-
-' +
-          '（功夫反弹：攻击者死亡，你安全无恙）')
+        info('🥟 功夫已激活', '功夫反弹：若有玩家同地点攻击你，你会自动反杀对方！')
         break
 
       // ═══════════════════════════════════════════
@@ -314,13 +308,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         if (targetPlayerId) {
           store.killPlayer(targetPlayerId, playerId)
           const target = players.find(p => p.id === targetPlayerId)
-          info('🗡️ 影杀成功',
-            `对 ${target?.name || '目标'} 发动了影杀！
-
-` +
-            `${target?.name} 已死亡。
-` +
-            `身份：${target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}`)
+          info('🗡️ 影杀成功', `${target?.name} 已死亡。身份：${target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}`)
         }
         break
 
@@ -331,13 +319,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         if (targetPlayerId) {
           const target = players.find(p => p.id === targetPlayerId)
           const identity = target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'
-          info('🔍 洞察 —— 查验结果',
-            `目标玩家：${target?.name}
-` +
-            `真实身份：${identity}
-
-` +
-            `（此信息仅你可见）`)
+          info('🔍 洞察 —— 查验结果', `目标：${target?.name}，身份：${identity}`)
         }
         break
 
@@ -348,13 +330,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         if (targetPlayerId) {
           const target = players.find(p => p.id === targetPlayerId)
           const identity = target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'
-          info('👁️ 识破 —— 查验结果',
-            `目标玩家：${target?.name}
-` +
-            `真实身份：${identity}
-
-` +
-            `（与你同一地点才能使用）`)
+          info('👁️ 识破 —— 查验结果', `目标：${target?.name}，身份：${identity}`)
         }
         break
 
@@ -365,11 +341,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         if (targetPlayerId) {
           applyHalt(targetPlayerId)
           const target = players.find(p => p.id === targetPlayerId)
-          info('🤼 过肩摔成功',
-            `${target?.name} 被你一个过肩摔摔倒在地！
-
-` +
-            `效果：${target?.name} 下个移动阶段无法行动（停步）`)
+          info('🤼 过肩摔成功', `${target?.name} 下个移动阶段无法行动（停步）`)
         }
         break
 
@@ -381,13 +353,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
           store.setTrackedPlayer(targetPlayerId)
           store.addTrackRecord(playerId, '开始追踪', currentPlayer?.locationId)
           const target = players.find(p => p.id === targetPlayerId)
-          info('🌿 追踪香囊已标记',
-            `已在 ${target?.name} 身上放置追踪香囊！
-
-` +
-            `右侧信息面板将实时显示 ${target?.name} 的
-` +
-            `行动记录：移动位置、使用技能等操作`)
+          info('🌿 追踪香囊已标记', `已标记 ${target?.name}，右侧面板将显示其行动记录`)
         }
         break
 
@@ -396,13 +362,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       // ═══════════════════════════════════════════
       case 'yeyu_stealth':
         applyHalt(playerId)
-        info('🦎 潜伏状态',
-          '你进入了隐匿状态！
-
-' +
-          '效果：下个移动阶段你无法行动
-' +
-          '（但在行动阶段你可以正常使用技能和攻击）')
+        info('🦎 潜伏状态', '下个移动阶段你无法行动，但行动阶段可正常使用技能')
         break
 
       // ═══════════════════════════════════════════
@@ -410,13 +370,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       // ═══════════════════════════════════════════
       case 'zhuxun_double_move':
         activateDoubleMove(playerId)
-        info('🏃 疾行已激活',
-          '你的移动速度提升！
-
-' +
-          '效果：本移动阶段你可以连续移动两次
-' +
-          '（每次移动到相邻地点）')
+        info('🏃 疾行已激活', '本移动阶段你可以连续移动两次')
         break
 
       // ═══════════════════════════════════════════
@@ -424,13 +378,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       // ═══════════════════════════════════════════
       case 'fengming_teleport':
         activateTeleport(playerId)
-        info('✨ 传送已激活',
-          '你的传送能力已就绪！
-
-' +
-          '效果：下次移动时你可以传送到任意地点
-' +
-          '（不限于相邻地点）')
+        info('✨ 传送已激活', '下次移动可到达任意地点（不限于相邻地点）')
         break
 
       // ═══════════════════════════════════════════
@@ -440,15 +388,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         setCutPair([])
         setInteraction('skill_target')
         setSelectedSkill(skill)
-        info('🚧 断路',
-          '在地图上依次点击两个地点，
-' +
-          '切断它们之间的道路。
-
-' +
-          '效果：被切断的道路将无法通行，
-' +
-          '地图上会显示红色 × 标记')
+        info('🚧 断路', '在地图上依次点击两个地点来切断道路')
         break
 
       // ═══════════════════════════════════════════
@@ -459,13 +399,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
           const targetLoc = locations.find(l => l.id === targetLocationId)
           const locPlayers = players.filter(p => p.locationId === targetLocationId && p.status === 'alive')
           locPlayers.forEach(p => applyHalt(p.id))
-          info('⚽ 大力射门！',
-            `一脚劲射！${targetLoc?.name} 内的所有玩家被震住了！
-
-` +
-            `影响玩家：${locPlayers.map(p => p.name).join('、') || '无'}
-` +
-            `效果：这些玩家下个移动阶段无法行动`)
+          info('⚽ 大力射门！', `${targetLoc?.name} 内玩家下回合无法行动：${locPlayers.map(p => p.name).join('、') || '无'}`)
         }
         break
 
@@ -476,16 +410,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
         if (currentPlayer?.locationId) {
           store.setDroneState(currentPlayer.id, currentPlayer.locationId, round)
           const loc = locations.find(l => l.id === currentPlayer.locationId)
-          info('🛸 侦察无人机已部署',
-            `在 ${loc?.name || '当前地点'} 部署了侦察无人机！
-
-` +
-            `效果：本轮经过该地点的所有玩家
-` +
-            `都将在投票阶段被记录并公示
-
-` +
-            `（查看右侧信息面板了解详情）`)
+          info('🛸 侦察无人机已部署', `在 ${loc?.name || '当前地点'} 部署了无人机，将记录经过人员`)
         }
         break
 
