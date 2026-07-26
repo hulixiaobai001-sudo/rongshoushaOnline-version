@@ -997,9 +997,6 @@ function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayer
   const winner = store.winner
   if (!winner) return null
   
-  const aliveKillers = players.filter((p: any) => p.status === 'alive' && p.identity === 'killer')
-  const aliveCivs = players.filter((p: any) => p.status === 'alive' && p.identity === 'civilian')
-  const winnerPlayers = winner === 'good' ? aliveCivs : aliveKillers
   const winnerSide = winner === 'good' ? '好人阵营' : '杀手阵营'
   const winnerIcon = winner === 'good' ? '👑' : '🗡️'
   
