@@ -80,6 +80,7 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [hasMoved, setHasMoved] = useState(false)
+  const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false) }, [phase])
@@ -177,6 +178,30 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
     }
 
     if (interaction === 'skill_target' && selectedSkill) {
+      // 断路：选择两个地点
+      if (selectedSkill.id === 'zhangyang_cut_connection') {
+        if (cutPair.length === 0) {
+          setCutPair([locId])
+          info('选择第一个地点', '已选择，请再点击第二个地点')
+        } else if (cutPair.length === 1) {
+          const first = cutPair[0]
+          const locA = locations.find(l => l.id === first)
+          const locB = locations.find(l => l.id === locId)
+          if (first === locId) { info('相同地点', '请选择两个不同的地点'); return }
+          if (!locA?.connectedTo.includes(locId) && !locB?.connectedTo.includes(first)) {
+            info('无道路相连', '这两个地点之间没有道路')
+            setCutPair([])
+            return
+          }
+          confirm(`切断 ${locA?.name} ↔ ${locB?.name} 的道路？`, () => {
+            store.severConnection(first, locId)
+            setCutPair([])
+            resetInteraction()
+            info('断路成功', `${locA?.name} ↔ ${locB?.name} 的道路已被切断`)
+          })
+        }
+        return
+      }
       // 如果是 location 类型的目标（如大力射门选相邻地点）
       handleSkillUse(selectedSkill, undefined, locId)
     }
@@ -314,7 +339,10 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
 
       // ── 张扬：断路 ──
       case 'zhangyang_cut_connection':
-        info('断路', '请选择两个地点切断道路（待实现）')
+        setCutPair([])
+        setInteraction('skill_target')
+        setSelectedSkill(skill)
+        info('断路', '在地图上依次点击两个地点来切断它们之间的道路')
         break
 
       // ── 王力：大力射门 ──
@@ -516,6 +544,26 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
                       <circle cx={loc.x} cy={loc.y} r={6}
                         fill="none" stroke="#f59e0b" strokeWidth="1" opacity="0.5" />
                     )}
+                    {/* 断路选点高亮 */}
+                    {cutPair.length === 1 && cutPair[0] === loc.id && (
+                      <circle cx={loc.x} cy={loc.y} r={5.5}
+                        fill="none" stroke="#dc2626" strokeWidth="1.5" opacity="0.8">
+                        <animate attributeName="r" values="5.5;6.5;5.5" dur="1s" repeatCount="indefinite" />
+                      </circle>
+                    )}
+                    {/* 被切断的道路（红×） */}
+                    {store.cutConnections && store.cutConnections.map((cut: any, ci: number) => {
+                      const cA = locations.find((l: any) => l.id === cut.locA)
+                      const cB = locations.find((l: any) => l.id === cut.locB)
+                      if (!cA || !cB) return null
+                      const mx = (cA.x + cB.x) / 2, my = (cA.y + cB.y) / 2
+                      return (
+                        <g key={`cut_${ci}`}>
+                          <line x1={mx-1.5} y1={my-1.5} x2={mx+1.5} y2={my+1.5} stroke="#dc2626" strokeWidth="1" />
+                          <line x1={mx+1.5} y1={my-1.5} x2={mx-1.5} y2={my+1.5} stroke="#dc2626" strokeWidth="1" />
+                        </g>
+                      )
+                    })}
                     {/* 地点圆圈 */}
                     <circle cx={loc.x} cy={loc.y} r={4.5}
                       fill={isCurrentLoc ? '#4f46e5' : isSelected ? '#92400e' : '#475569'}
@@ -600,64 +648,71 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
           )}
         </div>
 
-        {/* ═══ 地点信息面板 ═══ */}
-        <div className="shrink-0 px-3 py-2 bg-slate-800/60 border-t border-slate-700">
-          {infoLocation ? (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center shrink-0">
-                <MapPin className="w-4 h-4 text-indigo-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">
-                    {infoLocation.name}
-                  </span>
-                  {infoLocation.id === currentPlayer?.locationId && (
-                    <Badge className="text-[9px] h-4 bg-indigo-600/80 text-indigo-200 border-0">你在这里</Badge>
-                  )}
-                  {infoLocation.isBlocked && (
-                    <Badge className="text-[9px] h-4 bg-red-600/80 text-red-200 border-0">封锁中</Badge>
-                  )}
-                </div>
-                {infoLocation.effect && infoLocation.effect.type !== 'placeholder' && (
-                  <p className="text-[11px] text-amber-400/90 mt-0.5">
-                    <Sparkles className="w-3 h-3 inline mr-1" />
-                    {infoLocation.effect.name} — {infoLocation.effect.description}
-                  </p>
-                )}
-                {/* 仅当前地点显示玩家名单 */}
-                {infoLocation.id === currentPlayer?.locationId && infoPlayers.length > 1 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <Users className="w-3 h-3 text-slate-500" />
-                    {infoPlayers.filter(p => p.id !== currentPlayer?.id).map(p => {
-                      const pHero = p.heroId ? getHeroById(p.heroId) : null
-                      return (
-                        <Badge key={p.id} variant="outline"
-                          className="text-[10px] h-5 px-1.5 gap-1 border-slate-600 text-slate-300">
-                          <span className="w-3.5 h-3.5 rounded-full text-[7px] font-bold flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: pHero?.color || '#6366f1' }}>
-                            {players.indexOf(p) + 1}
-                          </span>
-                          {p.name}
-                        </Badge>
-                      )
-                    })}
+        {/* ═══ 底部双栏面板 ═══ */}
+        <div className="shrink-0 bg-slate-800/60 border-t border-slate-700">
+          <div className="flex gap-0">
+            {/* 左栏：地点信息+同地点玩家+尸体 */}
+            <div className="flex-1 px-3 py-2 min-w-0 border-r border-slate-700/50">
+              {infoLocation ? (
+                <div className="flex items-start gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center shrink-0">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-400" />
                   </div>
-                )}
-                {infoLocation.id !== currentPlayer?.locationId && (
-                  <p className="text-[11px] text-slate-500 mt-0.5">🔒 未知的人员信息</p>
-                )}
-              </div>
-              {selectedLocationId && selectedLocationId !== currentPlayer?.locationId && (
-                <button onClick={() => setSelectedLocationId(null)}
-                  className="text-[10px] text-slate-500 hover:text-white shrink-0 mt-1">
-                  返回当前位置
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-white">{infoLocation.name}</span>
+                      {infoLocation.id === currentPlayer?.locationId && (
+                        <Badge className="text-[8px] h-3.5 bg-indigo-600/80 text-indigo-200 border-0">你在这里</Badge>
+                      )}
+                      {infoLocation.isBlocked && (
+                        <Badge className="text-[8px] h-3.5 bg-red-600/80 text-red-200 border-0">封锁中</Badge>
+                      )}
+                      {selectedLocationId && selectedLocationId !== currentPlayer?.locationId && (
+                        <button onClick={() => setSelectedLocationId(null)}
+                          className="text-[9px] text-slate-500 hover:text-white">返回</button>
+                      )}
+                    </div>
+                    {infoLocation.effect && infoLocation.effect.type !== 'placeholder' && (
+                      <p className="text-[10px] text-amber-400/80 mt-0.5">{infoLocation.effect.name}</p>
+                    )}
+                    {/* 同地点存活玩家 */}
+                    {infoLocation.id === currentPlayer?.locationId && infoPlayers.filter(p => p.id !== currentPlayer?.id).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <span className="text-[9px] text-emerald-400">●</span>
+                        {infoPlayers.filter(p => p.id !== currentPlayer?.id).map(p => {
+                          const pHero = p.heroId ? getHeroById(p.heroId) : null
+                          return (
+                            <span key={p.id} className="text-[10px] text-slate-300"
+                              style={pHero ? {color: pHero.color} : {}}>
+                              {players.indexOf(p) + 1}.{p.name}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* 当前地点的尸体 */}
+                    {infoLocation.id === currentPlayer?.locationId && deadPlayers.filter(p => p.locationId === infoLocation.id).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <span className="text-[9px] text-red-400">✕</span>
+                        {deadPlayers.filter(p => p.locationId === infoLocation.id).map(p => (
+                          <span key={p.id} className="text-[10px] text-red-400/70">{p.name}</span>
+                        ))}
+                      </div>
+                    )}
+                    {infoLocation.id !== currentPlayer?.locationId && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">🔒 未知</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">加载中...</p>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-slate-500">加载中...</p>
-          )}
+            {/* 右栏：技能追踪/记录区 */}
+            <div className="w-1/3 min-w-[100px] px-3 py-2">
+              <InfoPanel currentPlayer={currentPlayer} store={store} players={players} />
+            </div>
+          </div>
         </div>
       </>
       )}
@@ -739,6 +794,44 @@ export function OnlineGame({ debugMode, botNames, onLeave }: OnlineGameProps) {
       {/* ═══ 弹窗 ═══ */}
       {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
         players={players} currentPhase={phase} />}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+//  信息面板（右栏：追踪/无人机/记录本）
+// ═══════════════════════════════════════════════════
+function InfoPanel({ currentPlayer, store, players }: { currentPlayer: any; store: any; players: any[] }) {
+  const { trackRecords, trackedPlayerId, droneLocationId, locations } = store
+  const trackedPlayer = players.find((p: any) => p.id === trackedPlayerId)
+  const droneLoc = locations?.find((l: any) => l.id === droneLocationId)
+
+  return (
+    <div className="space-y-1 max-h-[80px] overflow-auto">
+      {/* 追踪信息 */}
+      {trackedPlayer && trackRecords && trackRecords.length > 0 && (
+        <div>
+          <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}</p>
+          {trackRecords.slice(-3).map((r: any, i: number) => (
+            <p key={i} className="text-[8px] text-slate-400">{r.action}</p>
+          ))}
+        </div>
+      )}
+      {/* 无人机信息 */}
+      {droneLoc && (
+        <p className="text-[9px] text-cyan-400">🛸 无人机: {droneLoc.name}</p>
+      )}
+      {/* 无可追踪信息时显示记录本 */}
+      {(!trackedPlayer || !trackRecords || trackRecords.length === 0) && !droneLoc && (
+        <div>
+          <p className="text-[9px] text-slate-500 font-medium mb-0.5">📋 记录</p>
+          <textarea
+            placeholder="记录你的推理..."
+            className="w-full h-12 bg-slate-900/50 border border-slate-700 rounded text-[9px] text-slate-400 p-1 resize-none placeholder:text-slate-600"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }

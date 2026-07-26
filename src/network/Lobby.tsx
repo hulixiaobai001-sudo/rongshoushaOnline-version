@@ -349,8 +349,8 @@ export function Lobby({ onBack }: LobbyProps) {
                 </CardContent>
               </Card>
 
-              {/* 调试模式设置 */}
-              {debugMode && (
+              {/* 房主设置（身份分配） */}
+              {mode === 'host' && (
                 <DebugSettings />
               )}
 
