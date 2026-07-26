@@ -128,6 +128,7 @@ interface GameStore extends GameState {
   // 每轮重置技能使用计数（once_per_round 技能）
   incrementRoundSkillUsage: (skillId: string) => void;
   markSkillUsed: (playerId: string, skillId: string) => void;
+  setDroneState: (playerId: string, locationId: string, roundNum: number) => void;
   setDrone: (playerId: string, locationId: string) => void;
   decrementRoundSkillUsage: (skillId: string) => void;
   
@@ -308,6 +309,13 @@ export const useGameStore = create<GameStore>()(
       }),
 
     // 每轮重置技能使用计数（once_per_round 技能）
+    setDroneState: (playerId, locationId, roundNum) =>
+      set((state) => {
+        state.dronePlayerId = playerId;
+        state.droneLocationId = locationId;
+        state.droneRound = roundNum;
+      }),
+
     markSkillUsed: (playerId, skillId) =>
       set((state) => {
         if (!state.usedSkills[playerId]) state.usedSkills[playerId] = [];
