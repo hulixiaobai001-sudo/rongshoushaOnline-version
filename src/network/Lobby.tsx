@@ -62,6 +62,8 @@ export function Lobby({ onBack }: LobbyProps) {
   const [inputCode, setInputCode] = useState('')
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
+  const [myName, setMyName] = useState(() => localStorage.getItem('rs_player_name') || '')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showWarning, setShowWarning] = useState(true)
@@ -72,9 +74,23 @@ export function Lobby({ onBack }: LobbyProps) {
   const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
   const connectingRef = useRef(false)
 
+  // 防刷新：恢复玩家名，显示重连提示
+  useEffect(() => {
+    const savedName = localStorage.getItem('rs_player_name')
+    if (savedName) setMyName(savedName)
+    const savedRoom = localStorage.getItem('rs_room_code')
+    if (savedRoom) {
+      setInputCode(savedRoom)
+      setStatus('检测到上次的房间(' + savedRoom + ')，点击「加入」可快速重连')
+    }
+  }, [])
+
   useEffect(() => {
     on('playerJoin', (playerId: string) => {
-      setPlayers((prev: string[]) => [...prev, playerId])
+      setPlayers((prev: string[]) => {
+        if (!prev.includes(playerId)) return [...prev, playerId]
+        return prev
+      })
     })
     on('playerLeave', (playerId: string) => {
       setPlayers((prev: string[]) => prev.filter((id: string) => id !== playerId))
@@ -84,6 +100,14 @@ export function Lobby({ onBack }: LobbyProps) {
 
   const handleCreateRoom = async () => {
     if (connectingRef.current) return
+    // 检查房主名
+    let name = myName
+    if (!name) {
+      name = prompt('请输入你的玩家名称（房主）：') || ''
+      if (!name.trim()) { setStatus('请输入玩家名称'); return }
+      setMyName(name)
+      localStorage.setItem('rs_player_name', name)
+    }
     connectingRef.current = true
     setLoading(true)
     setStatus('正在创建房间...')
@@ -92,6 +116,10 @@ export function Lobby({ onBack }: LobbyProps) {
       setMode('host')
       setRoomCode(room.roomId)
       setPlayers([room.playerId])
+      setPlayerNames({[room.playerId]: name})
+      // 保存房间信息到localStorage（防刷新）
+      localStorage.setItem('rs_room_code', room.roomId)
+      localStorage.setItem('rs_room_role', 'host')
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
       setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
@@ -103,11 +131,22 @@ export function Lobby({ onBack }: LobbyProps) {
 
   const handleJoinRoom = async () => {
     if (!inputCode.trim() || connectingRef.current) return
+    // 检查玩家名
+    let name = myName
+    if (!name) {
+      name = prompt('请输入你的玩家名称：') || ''
+      if (!name.trim()) { setStatus('请输入玩家名称'); return }
+      setMyName(name)
+      localStorage.setItem('rs_player_name', name)
+    }
     connectingRef.current = true
     setLoading(true)
     setStatus('正在加入房间...')
     try {
       const room = await joinRoom(inputCode.trim())
+      // 保存房间信息到localStorage（防刷新）
+      localStorage.setItem('rs_room_code', inputCode.trim())
+      localStorage.setItem('rs_room_role', 'player')
       setMode('join')
       setRoomCode(room.roomId)
       setStatus('已加入房间，等待房主开始游戏...')
@@ -124,10 +163,14 @@ export function Lobby({ onBack }: LobbyProps) {
     setMode(null)
     setRoomCode('')
     setPlayers([])
+    setPlayerNames({})
     setStatus('')
     setDebugMode(false)
     setInGame(false)
     setBotPlayerNames([])
+    // 清除防刷新数据
+    localStorage.removeItem('rs_room_code')
+    localStorage.removeItem('rs_room_role')
     connectingRef.current = false
     setLoading(false)
   }
@@ -145,6 +188,9 @@ export function Lobby({ onBack }: LobbyProps) {
     const botNames = Array.from({ length: botCount }, (_, i) => `空壳玩家${i + 1}`)
     setPlayers([players[0], ...botIds])
     setBotPlayerNames(botNames)
+    const namesMap = {...playerNames}
+    botIds.forEach((id, i) => { namesMap[id] = botNames[i] })
+    setPlayerNames(namesMap)
     setDebugMode(true)
     setStatus('调试模式已启动，已填充空壳玩家')
   }
@@ -331,19 +377,26 @@ export function Lobby({ onBack }: LobbyProps) {
                     <p className="text-xs text-slate-500 text-center py-4">暂无玩家加入</p>
                   ) : (
                     <div className="space-y-1">
-                      {players.map((id, i) => (
-                        <div key={id}
-                          className={`flex items-center gap-2 text-sm rounded px-2 py-1.5 ${
-                            id.startsWith('bot_') ? 'bg-slate-900/30 text-slate-500' : 'bg-slate-900/50 text-slate-300'
-                          }`}>
-                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
-                          <span className={i === 0 ? 'font-medium text-amber-400' : ''}>
-                            {i === 0 ? '房主' : id.startsWith('bot_') ? `空壳${id.slice(-1)}` : `玩家 ${i}`}
-                          </span>
-                          {id.startsWith('bot_') && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
-                          {!id.startsWith('bot_') && i > 0 && <span className="text-[10px] text-slate-600 font-mono ml-auto">{id.slice(-4)}</span>}
-                        </div>
-                      ))}
+                      {players.map((id, i) => {
+                        const isHost = i === 0
+                        const isBot = id.startsWith('bot_')
+                        const name = isHost ? (playerNames[id] || myName || '房主')
+                          : isBot ? `空壳${id.slice(-1)}`
+                          : (playerNames[id] || `玩家${i}`)
+                        return (
+                          <div key={id}
+                            className={`flex items-center gap-2 text-sm rounded px-2 py-1.5 ${
+                              isBot ? 'bg-slate-900/30 text-slate-500' : 'bg-slate-900/50 text-slate-300'
+                            }`}>
+                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
+                            <span className={isHost ? 'font-medium text-amber-400' : ''}>
+                              {name}
+                            </span>
+                            {isHost && <span className="text-[9px] text-amber-500/70 ml-1">(房主)</span>}
+                            {isBot && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </CardContent>
