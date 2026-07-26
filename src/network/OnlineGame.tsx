@@ -73,6 +73,7 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
 
   // ── 本地状态 ──
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [popup, setPopup] = useState<PopupState | null>(null)
   const [interaction, setInteraction] = useState<GameInteraction>('idle')
   const [selectedSkill, setSelectedSkill] = useState<HeroSkill | null>(null)
@@ -124,8 +125,10 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
       // 阶段推进
       store.nextPhase()
       store.nextPhase()
-    } catch (e) {
+    } catch (e: any) {
       console.error('Init error:', e)
+      setError(e?.message || String(e))
+      setLoading(false)
     }
     const t = setTimeout(() => setLoading(false), 2000)
     return () => clearTimeout(t)
@@ -503,6 +506,21 @@ ${skill.description}`)
   // 判断是否为选目标模式
   const isTargetingMode = interaction === 'skill_target' && selectedSkill
   const isMoveMode = interaction === 'moving'
+
+  // 渲染错误兜底
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div className="text-center space-y-3 max-w-sm">
+          <div className="text-4xl">⚠️</div>
+          <h2 className="text-lg font-bold text-white">游戏渲染出错</h2>
+          <p className="text-xs text-red-400 font-mono bg-slate-800 p-3 rounded text-left whitespace-pre-wrap">{error}</p>
+          <button onClick={() => { setError(null); window.location.reload() }}
+            className="px-4 py-2 bg-indigo-600 rounded-lg text-white text-sm">重试</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
