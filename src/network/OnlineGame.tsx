@@ -1,18 +1,60 @@
 import { useState, useEffect } from 'react'
 import { useGameStore } from '@/store/gameStore'
-import { getHeroById } from '@/data/heroData'
+import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations } from '@/data/gameData'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import type { HeroSkill } from '@/types/hero'
 import {
-  Map, MessageSquare, ChevronUp, ChevronDown,
-  Footprints, Swords, Zap, Eye, ArrowLeft,
-  Check, Clock, AlertCircle, X, Target
+  Settings, BookOpen, Footprints, Zap,
+  MapPin, Users,
+  Check, X, AlertCircle, ChevronUp, ChevronDown,
+  Skull, Heart,
+  Navigation, Sparkles
 } from 'lucide-react'
 import { LoadingScreen } from './LoadingScreen'
 
+// ─── 弹窗类型 ────────────────────────────────────
+type PopupType = 'confirm' | 'info' | 'settings' | 'rules'
+
+interface PopupState {
+  type: PopupType
+  title?: string
+  desc?: string
+  onConfirm?: () => void
+  confirmText?: string
+}
+
+// ─── 游戏模式状态 ─────────────────────────────────
+type GameInteraction = 'idle' | 'moving' | 'skill_target'
+
+// ─── 周/天/阶段 映射 ──────────────────────────────
+const PHASE_DAY_MAP: Record<string, number> = {
+  investigate1: 1, action1: 1, settlement1: 1, move1: 1,
+  investigate2: 2, action2: 2, settlement2: 2, move2: 2,
+  investigate3: 3, action3: 3, settlement3: 3, move4: 3,
+  investigate4: 4, action4: 4, settlement4: 4,
+}
+
+const PHASE_LABEL: Record<string, string> = {
+  investigate1: '探查阶段①', action1: '行动阶段①', settlement1: '结算阶段①', move1: '移动阶段①',
+  investigate2: '探查阶段②', action2: '行动阶段②', settlement2: '结算阶段②', move2: '移动阶段②',
+  investigate3: '探查阶段③', action3: '行动阶段③', settlement3: '结算阶段③', move4: '移动阶段③',
+  investigate4: '探查阶段④', action4: '行动阶段④', settlement4: '结算阶段④',
+  shrine_vision: '凌宇神社', death_report: '死亡播报',
+  speak: '发言阶段', vote: '投票阶段', end: '游戏结束',
+  setup: '准备中', identity: '身份发布', start: '角色放置',
+}
+
+// ─── 获取移动阶段技能的提示 ──────────────────────
+const MOVE_SKILL_IDS = ['zhuxun_double_move', 'fengming_teleport']
+
+// ═══════════════════════════════════════════════════
+//  OnlineGame 主组件
+// ═══════════════════════════════════════════════════
 interface OnlineGameProps {
   isHost: boolean
   debugMode: boolean
@@ -20,459 +62,787 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-type PopupType = 'confirm' | 'info'
-
-interface Popup {
-  type: PopupType
-  title: string
-  desc?: string
-  onConfirm?: () => void
-  confirmText?: string
-}
-
 export function OnlineGame({ isHost, debugMode, botNames, onLeave }: OnlineGameProps) {
+  const store = useGameStore()
+  const {
+    phase, round, players, locations,
+    movePlayer, nextPhase,
+    activateKungFu, activateTeleport, activateDoubleMove, applyHalt,
+    usedSkills,
+  } = store
+
+  // ── 本地状态 ──
   const [loading, setLoading] = useState(true)
-  const [actionOpen, setActionOpen] = useState(false)
-  const [ready, setReady] = useState(false)
-  const [allReady, setAllReady] = useState(false)
-  const phase = useGameStore((s) => s.phase)
-  const [popup, setPopup] = useState<Popup | null>(null)
-  const [selectedAction, setSelectedAction] = useState<string | null>(null)
-  const [skillTargetMode, setSkillTargetMode] = useState<HeroSkill | null>(null)
+  const [popup, setPopup] = useState<PopupState | null>(null)
+  const [interaction, setInteraction] = useState<GameInteraction>('idle')
+  const [selectedSkill, setSelectedSkill] = useState<HeroSkill | null>(null)
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [skillsOpen, setSkillsOpen] = useState(false)
 
-  const { players, locations, round, movePlayer, nextPhase } = useGameStore()
-
-  useEffect(() => {
-    if (!loading && debugMode && !allReady) {
-      const timer = setTimeout(() => {
-        setReady(true)
-        let count = 0
-        const interval = setInterval(() => {
-          count++
-          if (count >= 3) { clearInterval(interval); setAllReady(true) }
-        }, 600)
-      }, 800)
-      return () => clearTimeout(timer)
-    }
-  }, [loading, debugMode, allReady])
-
-  const confirm = (title: string, onConfirm: () => void, confirmText = '确定') => {
-    setPopup({ type: 'confirm', title, onConfirm, confirmText })
-  }
-  const info = (title: string, desc: string) => {
-    setPopup({ type: 'info', title, desc })
-  }
-
-  if (loading) {
-    return <LoadingScreen debugMode={debugMode} botNames={botNames} onComplete={() => setLoading(false)} />
-  }
-
+  // 当前玩家（开发阶段固定为 players[0]）
   const currentPlayer = players[0]
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
+
+  // ── 阶段信息 ──
+  const phaseLabel = PHASE_LABEL[phase] || phase
+  const day = PHASE_DAY_MAP[phase] ?? null
+  const isMovePhase = phase.startsWith('move')
+  const isActionPhase = phase.startsWith('action')
+  const isVotePhase = phase === 'vote'
+  const isSettlementPhase = phase.startsWith('settlement')
+  const isGameOver = phase === 'end'
+
+  // 存活/死亡
+  const alivePlayers = players.filter(p => p.status === 'alive')
+  const deadPlayers = players.filter(p => p.status === 'dead')
+
+  // 同地点玩家
   const sameLocationPlayers = currentPlayer
-    ? players.filter((p) => p.id !== currentPlayer.id && p.locationId === currentPlayer.locationId && p.status === 'alive')
+    ? players.filter(p => p.id !== currentPlayer.id && p.locationId === currentPlayer.locationId && p.status === 'alive')
     : []
+  const allAliveOthers = players.filter(p => p.id !== currentPlayer?.id && p.status === 'alive')
 
-  // 所有存活玩家（供 any_player 技能选目标）
-  const allAlivePlayers = players.filter((p) => p.id !== currentPlayer?.id && p.status === 'alive')
-
-  const phaseName: Record<string, string> = {
-    investigate1: '探查①', action1: '行动①', settlement1: '结算①', move1: '移动②',
-    investigate2: '探查②', action2: '行动②', settlement2: '结算②', move2: '移动③',
-    investigate3: '探查③', action3: '行动③', settlement3: '结算③', move4: '移动④',
-    investigate4: '探查④', action4: '行动④', settlement4: '结算④',
-    death_report: '死亡播报', speak: '发言', vote: '投票', end: '结束',
-  }
-
-  const reachable = currentPlayer
+  // 可到达地点
+  const reachableLocations = currentPlayer
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
 
-  // ============ 技能使用 ============
-  const executeSkill = (skill: HeroSkill, target?: string) => {
-    const skillName = skill.name
-    switch (skill.id) {
-      case 'yeyu_stealth':
-        info('技能已使用', `【${skillName}】进入隐匿状态，将跳过下一个行动阶段`)
-        break
-      case 'fengming_teleport':
-        info('技能已使用', `【${skillName}】传送已激活，下次移动可到达任意地点`)
-        break
-      case 'zhuxun_double_move':
-        info('技能已使用', `【${skillName}】疾行已激活，本移动阶段可连续移动两次`)
-        break
-      case 'niangao_kungfu':
-        info('技能已使用', `【${skillName}】功夫已激活！本行动阶段内任何攻击都将被反击`)
-        break
-      case 'xiling_kill_same_room': {
-        const targetPlayer = players.find((p) => p.id === target)
-        info('技能已使用', `【${skillName}】对 ${targetPlayer?.name || '目标'} 发起影杀！`)
-        break
-      }
-      case 'kexiong_investigate':
-      case 'tianyi_investigate_same_room': {
-        const targetPlayer = players.find((p) => p.id === target)
-        info('技能已使用', `【${skillName}】查验 ${targetPlayer?.name || '目标'} 的身份`)
-        break
-      }
-      case 'yanzhuo_suplex': {
-        const targetPlayer = players.find((p) => p.id === target)
-        info('技能已使用', `【${skillName}】对 ${targetPlayer?.name || '目标'} 使用过肩摔，目标将跳过下一个行动阶段`)
-        break
-      }
-      case 'baiye_track': {
-        const targetPlayer = players.find((p) => p.id === target)
-        info('技能已使用', `【${skillName}】已标记 ${targetPlayer?.name || '目标'}，将追踪其本轮后续行动`)
-        break
-      }
-      case 'zhangyang_cut_connection':
-        info('技能已使用', `【${skillName}】切断道路（需选择两个地点，待实现）`)
-        break
-      case 'jiangfeng_drone':
-        info('技能已使用', `【${skillName}】在当前地点放置侦察无人机，开始记录经过人员`)
-        break
-      case 'wangli_big_shot':
-        info('技能已使用', `【${skillName}】大力射门！选择一个相邻地点，该地点内所有玩家下回合无法行动`)
-        break
-      default:
-        info('技能已使用', `【${skillName}】${skill.description}`)
+  // ── 加载完成 ──
+  useEffect(() => {
+    if (loading && debugMode) {
+      const t = setTimeout(() => setLoading(false), 1200)
+      return () => clearTimeout(t)
     }
-    setSkillTargetMode(null)
-    setSelectedAction(null)
-    setActionOpen(false)
+  }, [loading, debugMode])
+
+  // ── 点击的地点信息 ──
+  const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
+  const infoLocation = locations.find(l => l.id === infoLocationId)
+  const infoPlayers = infoLocation
+    ? players.filter(p => p.locationId === infoLocation.id && p.status === 'alive')
+    : []
+
+  // ── 重置交互 ──
+  const resetInteraction = () => {
+    setInteraction('idle')
+    setSelectedSkill(null)
+    setSelectedLocationId(null)
   }
 
+  // ── 弹窗辅助 ──
+  const confirm = (title: string, onConfirm: () => void, confirmText = '确定') =>
+    setPopup({ type: 'confirm', title, onConfirm, confirmText })
+  const info = (title: string, desc: string) =>
+    setPopup({ type: 'info', title, desc })
+  const showSettings = () => setPopup({ type: 'settings' })
+  const showRules = () => setPopup({ type: 'rules' })
+
+  // ── 移动 ──
+  const handleMoveClick = () => {
+    if (!isMovePhase) { info('不在移动阶段', '当前不是移动阶段，无法移动'); return }
+    if (!currentPlayer) return
+    if (reachableLocations.length === 0) { info('无处可去', '当前地点没有相连的道路'); return }
+    setInteraction('moving')
+    setSkillsOpen(false)
+  }
+
+  const handleLocationSelect = (locId: string) => {
+    if (interaction === 'idle') {
+      // 普通模式：点击查看地点信息
+      setSelectedLocationId(locId === selectedLocationId ? null : locId)
+      return
+    }
+
+    if (interaction === 'moving') {
+      if (!currentPlayer) return
+      const currentLoc = locations.find(l => l.id === currentPlayer.locationId)
+      const targetLoc = locations.find(l => l.id === locId)
+      if (!currentLoc || !targetLoc) return
+
+      if (!currentLoc.connectedTo.includes(locId)) {
+        info('无法到达', `从 ${currentLoc.name} 无法到达 ${targetLoc.name}`)
+        return
+      }
+
+      confirm(`移动到 ${targetLoc.name}？`, () => {
+        movePlayer(currentPlayer.id, locId)
+        setSelectedLocationId(locId)
+        resetInteraction()
+        info('移动完成', `已到达 ${targetLoc.name}`)
+      })
+      return
+    }
+
+    if (interaction === 'skill_target' && selectedSkill) {
+      // 如果是 location 类型的目标（如大力射门选相邻地点）
+      handleSkillUse(selectedSkill, undefined, locId)
+    }
+  }
+
+  // ── 技能系统 ──
   const handleSkillClick = (skill: HeroSkill) => {
-    if (!phase.startsWith('action') && skill.usablePhase.some((p) => p === 'vote')) {
-      // vote阶段技能允许
-    } else if (!skill.usablePhase.some((p) => phase.startsWith(p))) {
+    // 检查是否为移动阶段技能
+    if (isMovePhase && MOVE_SKILL_IDS.includes(skill.id)) {
+      // 移动阶段技能在左下角点击时触发
+      handleMoveSkill(skill)
+      return
+    }
+
+    // 检查阶段
+    if (!skill.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote'))) {
       info('无法使用', `【${skill.name}】只能在 ${skill.usablePhase.join(', ')} 阶段使用`)
       return
     }
 
-    if (skill.targetType === 'self') {
-      confirm(`使用【${skill.name}】？`, () => executeSkill(skill))
-    } else if (skill.targetType === 'same_location_player') {
-      if (sameLocationPlayers.length === 0) {
-        info('无目标', '附近没有其他玩家')
+    // 检查使用次数
+    if (skill.limit === 'once_per_game') {
+      const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
+      if (usedSkillIds.includes(skill.id)) {
+        info('已使用', `【${skill.name}】每局仅能使用一次`)
         return
       }
-      setSkillTargetMode(skill)
-      setSelectedAction('skill_target')
-    } else if (skill.targetType === 'any_player') {
-      if (allAlivePlayers.length === 0) {
-        info('无目标', '没有可选的存活玩家')
-        return
-      }
-      setSkillTargetMode(skill)
-      setSelectedAction('skill_target')
-    } else {
-      info(skill.name, `${skill.description}\n\n（需要选择目标，待实现）`)
+    }
+
+    // 根据目标类型处理
+    switch (skill.targetType) {
+      case 'self':
+        confirm(`使用【${skill.name}】？\n${skill.description}`, () => handleSkillUse(skill))
+        break
+      case 'same_location_player':
+        if (sameLocationPlayers.length === 0) {
+          info('无目标', '附近没有其他玩家')
+          return
+        }
+        setSelectedSkill(skill)
+        setInteraction('skill_target')
+        setSkillsOpen(false)
+        break
+      case 'any_player':
+        if (allAliveOthers.length === 0) {
+          info('无目标', '没有可选的存活玩家')
+          return
+        }
+        setSelectedSkill(skill)
+        setInteraction('skill_target')
+        setSkillsOpen(false)
+        break
+      case 'adjacent_location':
+        setSelectedSkill(skill)
+        setInteraction('skill_target')
+        setSkillsOpen(false)
+        break
+      default:
+        confirm(`使用【${skill.name}】？`, () => handleSkillUse(skill))
     }
   }
 
-  // ============ 移动 ============
-  const handleMove = (locId: string) => {
-    const currentLoc = locations.find((l) => l.id === currentPlayer?.locationId)
-    const targetLoc = locations.find((l) => l.id === locId)
-    if (!currentPlayer || !currentLoc || !targetLoc) return
-    if (currentLoc.connectedTo.includes(locId)) {
-      confirm(`从 ${currentLoc.name} 到 ${targetLoc.name}？`, () => {
-        movePlayer(currentPlayer.id, locId)
-        setSelectedAction(null)
-        setActionOpen(false)
-        info('移动成功', `已到达 ${targetLoc.name}`)
-      })
-    } else {
-      info('无法移动', '没有道路相连')
-    }
+  const handleMoveSkill = (skill: HeroSkill) => {
+    confirm(`使用【${skill.name}】？\n${skill.description}`, () => {
+      handleSkillUse(skill)
+    })
   }
 
-  // ============ 底部面板内容 ============
-  const renderBottomPanel = () => {
-    // 技能选目标模式
-    if (selectedAction === 'skill_target' && skillTargetMode) {
-      const targets = skillTargetMode.targetType === 'same_location_player' ? sameLocationPlayers : allAlivePlayers
-      return (
-        <div className="px-3 py-2 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-300 font-medium">
-              <Target className="w-3 h-3 inline mr-1" />选择目标 — {skillTargetMode.name}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => { setSelectedAction(null); setSkillTargetMode(null) }}
-              className="h-6 text-[10px] text-slate-400"><X className="w-3 h-3 mr-1" />取消</Button>
-          </div>
-          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-auto">
-            {targets.map((p) => {
-              const pHero = p.heroId ? getHeroById(p.heroId) : null
-              return (
-                <Button key={p.id} variant="outline" size="sm"
-                  onClick={() => confirm(`对 ${p.name} 使用【${skillTargetMode.name}】？`, () => executeSkill(skillTargetMode, p.id))}
-                  className="h-7 text-[10px] border-slate-600 text-slate-300 hover:border-indigo-500 gap-1">
-                  <span className="w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: pHero?.color || '#6366f1' }}>
-                    {players.indexOf(p) + 1}
-                  </span>
-                  {p.name}
-                </Button>
-              )
-            })}
-          </div>
-          {targets.length === 0 && <p className="text-[10px] text-slate-500 text-center py-2">没有可选目标</p>}
-        </div>
-      )
+  const handleSkillUse = (skill: HeroSkill, targetPlayerId?: string, targetLocationId?: string) => {
+    const playerId = currentPlayer?.id || ''
+    const skillName = skill.name
+
+    // 执行技能效果
+    switch (skill.id) {
+      // ── 年糕：功夫 ──
+      case 'niangao_kungfu':
+        activateKungFu(playerId)
+        info('功夫已激活', '本行动阶段内任何攻击都将被反击！')
+        break
+
+      // ── 西凌：影杀 ──
+      case 'xiling_kill_same_room':
+        if (targetPlayerId) {
+          store.killPlayer(targetPlayerId, playerId)
+          const target = players.find(p => p.id === targetPlayerId)
+          info('影杀成功', `对 ${target?.name || '目标'} 发起影杀！`)
+        }
+        break
+
+      // ── 科雄/天燚：探查 ──
+      case 'kexiong_investigate':
+      case 'tianyi_investigate_same_room':
+        if (targetPlayerId) {
+          const target = players.find(p => p.id === targetPlayerId)
+          const realIdentity = target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'
+          info('身份查验', `${target?.name} 的真实身份是：${realIdentity}`)
+        }
+        break
+
+      // ── 言浊：过肩摔 ──
+      case 'yanzhuo_suplex':
+        if (targetPlayerId) {
+          applyHalt(targetPlayerId)
+          const target = players.find(p => p.id === targetPlayerId)
+          info('过肩摔成功', `${target?.name} 下个移动阶段无法行动`)
+        }
+        break
+
+      // ── 白野：追踪香囊 ──
+      case 'baiye_track':
+        if (targetPlayerId) {
+          store.setTrackedPlayer(targetPlayerId)
+          const target = players.find(p => p.id === targetPlayerId)
+          info('追踪已标记', `已标记 ${target?.name}，将追踪其后续行动`)
+        }
+        break
+
+      // ── 夜羽：潜伏 ──
+      case 'yeyu_stealth':
+        applyHalt(playerId)
+        info('潜伏状态', '进入隐匿状态，将跳过下一个行动阶段')
+        break
+
+      // ── 竹隼：疾行 ──
+      case 'zhuxun_double_move':
+        activateDoubleMove(playerId)
+        info('疾行已激活', '本移动阶段可连续移动两次')
+        break
+
+      // ── 冯明：传送 ──
+      case 'fengming_teleport':
+        activateTeleport(playerId)
+        info('传送已激活', '下次移动可到达任意地点')
+        break
+
+      // ── 张扬：断路 ──
+      case 'zhangyang_cut_connection':
+        info('断路', '请选择两个地点切断道路（待实现）')
+        break
+
+      // ── 王力：大力射门 ──
+      case 'wangli_big_shot':
+        if (targetLocationId) {
+          const targetLoc = locations.find(l => l.id === targetLocationId)
+          info('大力射门', `${targetLoc?.name} 内的所有玩家下回合无法行动`)
+          // 对目标地点的所有玩家施加 halt
+          const locPlayers = players.filter(p => p.locationId === targetLocationId && p.status === 'alive')
+          locPlayers.forEach(p => applyHalt(p.id))
+        }
+        break
+
+      // ── 江枫：侦察无人机 ──
+      case 'jiangfeng_drone':
+        info('侦察无人机', '在当前地点放置无人机，开始记录经过人员')
+        break
+
+      default:
+        info('技能已使用', `【${skillName}】${skill.description}`)
     }
 
-    // 移动选地点模式
-    if (selectedAction === 'move') {
-      return (
-        <div className="px-3 py-2 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-300 font-medium">选择目标地点</span>
-            <Button variant="ghost" size="sm" onClick={() => setSelectedAction(null)}
-              className="h-6 text-[10px] text-slate-400"><X className="w-3 h-3 mr-1" />取消</Button>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 max-h-32 overflow-auto">
-            {reachable.map((loc) => (
-              <Button key={loc.id} variant="outline" size="sm" onClick={() => handleMove(loc.id)}
-                className="h-8 text-[10px] border-slate-600 text-slate-300 hover:border-indigo-500">
-                {loc.name}
-              </Button>
-            ))}
-          </div>
-          {reachable.length === 0 && <p className="text-[10px] text-slate-500 text-center py-2">没有可到达的地点</p>}
-        </div>
-      )
-    }
-
-    // 主行动面板
-    return (
-      <>
-        <Button variant="ghost" onClick={() => setActionOpen(!actionOpen)}
-          className="w-full h-7 text-[11px] text-slate-300 hover:text-white rounded-none flex items-center justify-center gap-1">
-          {actionOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-          {actionOpen ? '收起' : '展开行动面板'}
-        </Button>
-        {actionOpen && (
-          <div className="px-3 pb-2 space-y-1.5">
-            <div className="grid grid-cols-4 gap-1.5">
-              <ActionBtn icon={Footprints} label="移动" onClick={() => {
-                if (!phase.startsWith('move')) { info('非移动阶段', '当前不是移动阶段'); return }
-                setSelectedAction('move')
-              }} />
-              <ActionBtn icon={Swords} label="攻击" onClick={() => {
-                if (currentPlayer?.identity !== 'killer') { info('权限不足', '仅杀手可以攻击'); return }
-                if (!phase.startsWith('action')) { info('非行动阶段', '当前不是行动阶段'); return }
-                info('攻击', '攻击功能待实现')
-              }} />
-              <ActionBtn icon={Zap} label="技能" onClick={() => {
-                if (!phase.startsWith('action')) { info('非行动阶段', '当前不是行动阶段'); return }
-                setActionOpen(false)
-                info('选择技能', '请在右侧角色面板点击技能按钮')
-              }} />
-              <ActionBtn icon={Eye} label="侦查" onClick={() => info('侦查', '侦查功能待实现')} />
-            </div>
-          </div>
-        )}
-      </>
-    )
+    resetInteraction()
+    setSkillsOpen(false)
   }
+
+  const handlePlayerTargetSelect = (targetId: string) => {
+    if (!selectedSkill) return
+    const target = players.find(p => p.id === targetId)
+    confirm(`对 ${target?.name} 使用【${selectedSkill.name}】？`, () => {
+      handleSkillUse(selectedSkill, targetId)
+    })
+  }
+
+  // ── 准备 ──
+  const handleReady = () => {
+    if (isGameOver) {
+      confirm('返回大厅？', () => onLeave())
+      return
+    }
+    confirm('进入下一阶段？', () => {
+      resetInteraction()
+      nextPhase()
+    }, '确认')
+  }
+
+  // ── 加载中 ──
+  if (loading) {
+    return <LoadingScreen debugMode={debugMode} botNames={botNames} onComplete={() => setLoading(false)} />
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  主界面渲染
+  // ═══════════════════════════════════════════════════
+
+  // 判断当前可用的英雄技能
+  const availableSkills = hero?.skills.filter(s => {
+    // 检查阶段
+    const phaseOk = s.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote'))
+    // 检查次数
+    const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
+    const notUsed = s.limit === 'unlimited' || s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)
+    return phaseOk && notUsed
+  }) || []
+
+  // 移动阶段技能（单独在左下角展示）
+  const moveSkills = availableSkills.filter(s => MOVE_SKILL_IDS.includes(s.id))
+
+  // 判断是否为选目标模式
+  const isTargetingMode = interaction === 'skill_target' && selectedSkill
+  const isMoveMode = interaction === 'moving'
 
   return (
-    <div className="h-screen flex flex-col bg-slate-900 text-white">
-      <header className="px-3 py-2 border-b border-slate-700 flex items-center gap-2 shrink-0 bg-slate-800/50 z-10">
-        <Button variant="ghost" size="sm" onClick={onLeave}
-          className="h-7 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 shrink-0">
-          <ArrowLeft className="w-3.5 h-3.5" />
-        </Button>
-        <Badge variant="outline" className="text-[10px] font-mono text-slate-300 border-slate-600">
-          {round ? `第 ${round} 轮` : '准备中'}
-        </Badge>
-        <Badge className="text-[10px] bg-indigo-600">{phaseName[phase] || '游戏中'}</Badge>
-        <Button variant="ghost" size="sm" onClick={() => confirm('进入下一阶段？', () => nextPhase())}
-          className="h-6 text-[10px] text-slate-300 hover:text-white px-1.5">下一阶段 ▸</Button>
+    <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
+      {/* ═══ 顶栏 ═══ */}
+      <header className="shrink-0 px-3 py-2.5 bg-slate-800/80 border-b border-slate-700 flex items-center gap-2">
+        {/* 左：周/天 + 阶段 */}
+        <div className="flex items-center gap-2 min-w-0">
+          <Badge variant="secondary" className="text-[10px] md:text-xs font-mono shrink-0 bg-slate-700 text-slate-200 border-slate-600">
+            <Navigation className="w-3 h-3 mr-1 text-indigo-400" />
+            第{round}周{day ? `·第${day}天` : ''}
+          </Badge>
+          <Badge className="text-[10px] md:text-xs bg-indigo-600 shrink-0">
+            {phaseLabel}
+          </Badge>
+        </div>
+
         <div className="flex-1" />
-        {isHost && <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-700">房主</Badge>}
-        {debugMode && <Badge className="text-[10px] bg-amber-600">调试</Badge>}
+
+        {/* 存活/死亡 */}
+        <div className="flex items-center gap-1.5 mr-1">
+          <span className="text-[10px] text-emerald-400 flex items-center gap-0.5">
+            <Heart className="w-3 h-3" />
+            {alivePlayers.length}
+          </span>
+          {deadPlayers.length > 0 && (
+            <span className="text-[10px] text-red-400 flex items-center gap-0.5">
+              <Skull className="w-3 h-3" />
+              {deadPlayers.length}
+            </span>
+          )}
+        </div>
+
+        {/* 右：设置 + 规则 */}
+        <button onClick={showSettings}
+          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+          <Settings className="w-4 h-4" />
+        </button>
+        <button onClick={showRules}
+          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+          <BookOpen className="w-4 h-4" />
+        </button>
       </header>
 
-      {!allReady ? (
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-          <Card className="w-full max-w-sm bg-slate-800 border-slate-700">
-            <CardContent className="p-6 text-center space-y-4">
-              <Clock className="w-12 h-12 text-emerald-400 mx-auto" />
-              <h3 className="text-base font-bold text-white">准备就绪</h3>
-              <p className="text-xs text-slate-400">请确认已准备好开始游戏</p>
-              <div className="space-y-1.5 text-left">
-                {players.slice(0, 8).map((p, i) => {
-                  const isBot = p.id.startsWith('bot_')
-                  const isReady = isBot || (i === 0 && ready)
-                  return (
-                    <div key={p.id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm ${isReady ? 'bg-emerald-900/20' : 'bg-slate-900/30'}`}>
-                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold shrink-0">{i + 1}</span>
-                      <span className={i === 0 ? 'text-amber-400 font-medium' : 'text-slate-300'}>{i === 0 ? '你' : isBot ? `空壳${p.id.slice(-1)}` : `玩家${i + 1}`}</span>
-                      {isBot && <span className="text-[9px] text-amber-600/60">空壳</span>}
-                      <div className="flex-1" />
-                      {isReady ? <Check className="w-4 h-4 text-emerald-400" /> : <Clock className="w-4 h-4 text-slate-600" />}
-                    </div>
+      {/* ═══ 地图区域 ═══ */}
+      <main className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 p-2 min-h-0 relative">
+          {locations.length > 0 ? (
+            <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+              {/* ── 连线 ── */}
+              {locations.map(loc =>
+                loc.connectedTo.map(connId => {
+                  if (connId <= loc.id) return null
+                  const target = locations.find(l => l.id === connId)
+                  if (!target) return null
+                  const isHighlighted = isMoveMode && reachableLocations.some(r =>
+                    (r.id === loc.id && currentPlayer?.locationId === target.id) ||
+                    (r.id === target.id && currentPlayer?.locationId === loc.id)
                   )
-                })}
-              </div>
-              {!ready ? <Button onClick={() => setReady(true)} className="w-full bg-emerald-600 hover:bg-emerald-700">我准备好了</Button>
-                : !allReady ? <p className="text-xs text-amber-400">等待其他玩家准备中...</p> : null}
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 flex flex-col lg:flex-row gap-2 p-2 min-h-0 overflow-hidden">
-            {/* 大地图 */}
-            <Card className="flex-1 flex flex-col min-h-[120px] bg-slate-800 border-slate-700 overflow-hidden">
-              <CardContent className="flex-1 p-1 min-h-0">
-                {locations.length > 0 ? (
-                  <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-                    {locations.map((loc) =>
-                      loc.connectedTo.map((connId) => {
-                        if (connId <= loc.id) return null
-                        const target = locations.find((l) => l.id === connId)
-                        if (!target) return null
-                        return <line key={`${loc.id}_${connId}`} x1={loc.x} y1={loc.y} x2={target.x} y2={target.y} stroke="#334155" strokeWidth="0.6" />
-                      })
+                  return (
+                    <line key={`${loc.id}_${connId}`}
+                      x1={loc.x} y1={loc.y} x2={target.x} y2={target.y}
+                      stroke={isHighlighted ? '#818cf8' : '#334155'}
+                      strokeWidth={isHighlighted ? '1' : '0.6'}
+                      strokeDasharray={isHighlighted ? '1,1' : 'none'}
+                    />
+                  )
+                })
+              )}
+
+              {/* ── 地点 ── */}
+              {locations.map(loc => {
+                const locPlayers = players.filter(p => p.locationId === loc.id && p.status === 'alive')
+                const isCurrentLoc = locPlayers.some(p => p.id === currentPlayer?.id)
+                const isReachable = isMoveMode && reachableLocations.some(r => r.id === loc.id)
+                const isClickable = isMoveMode ? isReachable : true
+
+                return (
+                  <g key={loc.id}
+                    onClick={() => isClickable && handleLocationSelect(loc.id)}
+                    style={{ cursor: isClickable ? 'pointer' : 'default' }}>
+                    {/* 移动模式高亮 */}
+                    {isReachable && (
+                      <circle cx={loc.x} cy={loc.y} r={6.5}
+                        fill="none" stroke="#818cf8" strokeWidth="1.2" opacity="0.7">
+                        <animate attributeName="r" values="6;7;6" dur="1.5s" repeatCount="indefinite" />
+                      </circle>
                     )}
-                    {locations.map((loc) => {
-                      const locPlayers = players.filter((p) => p.locationId === loc.id && p.status === 'alive')
-                      const isCurrentLoc = locPlayers.some((p) => p.id === currentPlayer?.id)
+                    {/* 技能目标高亮 */}
+                    {isTargetingMode && selectedSkill?.targetType === 'adjacent_location' && (
+                      <circle cx={loc.x} cy={loc.y} r={6.5}
+                        fill="none" stroke="#f59e0b" strokeWidth="1.2" opacity="0.7" />
+                    )}
+                    {/* 地点圆圈 */}
+                    <circle cx={loc.x} cy={loc.y} r={4.5}
+                      fill={isCurrentLoc ? '#4f46e5' : locPlayers.length > 0 ? '#475569' : '#334155'}
+                      stroke={isCurrentLoc ? '#818cf8' : isReachable ? '#818cf8' : isTargetingMode ? '#f59e0b' : '#475569'}
+                      strokeWidth={isCurrentLoc || isReachable || isTargetingMode ? '1.5' : '0.8'}
+                    />
+                    {/* 地点名称 */}
+                    <text x={loc.x} y={loc.y + 9} textAnchor="middle"
+                      fontSize="3" fill={isCurrentLoc ? '#c7d2fe' : '#94a3b8'}
+                      fontWeight={isCurrentLoc ? '700' : '500'}
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      {loc.name.length > 5 ? loc.name.slice(0, 5) + '..' : loc.name}
+                    </text>
+                    {/* 地点效果标记 */}
+                    {loc.effect && loc.effect.type !== 'placeholder' && (
+                      <text x={loc.x} y={loc.y + 12.5} textAnchor="middle"
+                        fontSize="2.2" fill="#d97706" fontWeight="600"
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                        {loc.effect.name}
+                      </text>
+                    )}
+                    {/* 玩家图标 */}
+                    {locPlayers.map((p, i) => {
+                      const angle = (2 * Math.PI * i) / Math.max(locPlayers.length, 1) - Math.PI / 2
+                      const px = loc.x + Math.cos(angle) * 7
+                      const py = loc.y + Math.sin(angle) * 7
+                      const isMe = p.id === currentPlayer?.id
+                      const pHero = p.heroId ? getHeroById(p.heroId) : null
                       return (
-                        <g key={loc.id}>
-                          <circle cx={loc.x} cy={loc.y} r={4}
-                            fill={isCurrentLoc ? '#4f46e5' : locPlayers.length > 0 ? '#475569' : '#334155'}
-                            stroke={isCurrentLoc ? '#818cf8' : '#475569'} strokeWidth="0.8" />
-                          <text x={loc.x} y={loc.y + 8} textAnchor="middle" fontSize="2.4" fill="#94a3b8"
+                        <g key={p.id} style={{ cursor: isTargetingMode && selectedSkill?.targetType !== 'self' ? 'pointer' : 'default' }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (isTargetingMode) {
+                              const canTarget = selectedSkill?.targetType === 'any_player' ||
+                                (selectedSkill?.targetType === 'same_location_player' && sameLocationPlayers.some(sp => sp.id === p.id))
+                              if (canTarget) handlePlayerTargetSelect(p.id)
+                            }
+                          }}>
+                          <circle cx={px} cy={py} r={2.8}
+                            fill={isMe ? '#818cf8' : pHero?.color || '#6366f1'}
+                            stroke={isMe ? '#fff' : '#1e293b'} strokeWidth="0.5" />
+                          <text x={px} y={py + 1} textAnchor="middle"
+                            fontSize="2.8" fill="white" fontWeight="bold"
                             style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                            {loc.name.length > 4 ? loc.name.slice(0, 4) + '..' : loc.name}
+                            {players.indexOf(p) + 1}
                           </text>
-                          {locPlayers.map((p, i) => {
-                            const angle = ((2 * Math.PI * i) / Math.max(locPlayers.length, 1)) - Math.PI / 2
-                            const px = loc.x + Math.cos(angle) * 6
-                            const py = loc.y + Math.sin(angle) * 6
-                            const isMe = p.id === currentPlayer?.id
-                            const pHero = p.heroId ? getHeroById(p.heroId) : null
-                            return (
-                              <g key={p.id}>
-                                <circle cx={px} cy={py} r={2.2}
-                                  fill={isMe ? '#818cf8' : pHero?.color || '#6366f1'}
-                                  stroke={isMe ? '#fff' : '#1e293b'} strokeWidth="0.4" />
-                                <text x={px} y={py + 0.8} textAnchor="middle" fontSize="2.4" fill="white" fontWeight="bold"
-                                  style={{ pointerEvents: 'none', userSelect: 'none' }}>{players.indexOf(p) + 1}</text>
-                              </g>
-                            )
-                          })}
                         </g>
                       )
                     })}
-                  </svg>
-                ) : <div className="h-full flex items-center justify-center"><Map className="w-8 h-8 text-slate-700" /></div>}
-              </CardContent>
-            </Card>
+                  </g>
+                )
+              })}
 
-            {/* 右侧面板 */}
-            <div className="w-full lg:w-64 shrink-0 flex flex-col gap-2 min-h-0">
-              <Card className="bg-slate-800 border-slate-700 shrink-0">
-                <CardContent className="p-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      📍 {locations.find((l) => l.id === currentPlayer?.locationId)?.name || '未知'}
-                    </span>
-                  </div>
-                  <div className="space-y-1 max-h-20 overflow-auto">
-                    {sameLocationPlayers.length > 0 ? sameLocationPlayers.map((p) => (
-                      <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-900/50 rounded px-1.5 py-1">
-                        <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 text-[8px] flex items-center justify-center text-white font-bold shrink-0">{players.indexOf(p) + 1}</div>
-                        <span className="truncate">{p.name}</span>
-                      </div>
-                    )) : <p className="text-[10px] text-slate-600 text-center py-2">附近没有其他玩家</p>}
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => info('区域聊天', '聊天功能待实现 🦊')}
-                    className="w-full mt-1 h-5 text-[10px] text-slate-400 hover:text-white">
-                    <MessageSquare className="w-3 h-3 mr-1" />区域聊天
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800 border-slate-700 flex-1 min-h-0">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                      style={{ backgroundColor: hero?.color || '#6366f1' }}>
-                      {currentPlayer?.name?.charAt(0) || '?'}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-white truncate">
-                        {currentPlayer?.name || '未知'}
-                        {hero && <span className="text-[10px] text-slate-400 ml-1">({hero.name})</span>}
-                      </p>
-                      <p className="text-[9px] text-slate-500">{hero?.title || ''}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {hero && hero.skills.length > 0 ? hero.skills.map((skill) => (
-                      <Button key={skill.id} variant="outline" size="sm" onClick={() => handleSkillClick(skill)}
-                        className="h-5 text-[10px] px-2 border-slate-600 text-slate-300 hover:bg-slate-700">
-                        {skill.name}
-                      </Button>
-                    )) : <p className="text-[10px] text-slate-600">暂无技能</p>}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* 底部操作条 */}
-          <div className="border-t border-slate-700 bg-slate-800 shrink-0">
-            {renderBottomPanel()}
-          </div>
-        </div>
-      )}
-
-      {/* 弹窗 */}
-      {popup && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setPopup(null)}>
-          <Card className="bg-slate-800 border-slate-700 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-            <CardContent className="p-5 text-center space-y-4">
-              {popup.type === 'confirm' ? (
-                <>
-                  <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
-                  <h3 className="text-base font-bold text-white">{popup.title}</h3>
-                  <p className="text-sm text-slate-400">确定要执行此操作吗？</p>
-                  <div className="flex gap-3 pt-1">
-                    <Button variant="outline" onClick={() => setPopup(null)}
-                      className="flex-1 border-slate-600 text-slate-300 h-9 text-sm">取消</Button>
-                    <Button onClick={() => { popup.onConfirm?.(); setPopup(null) }}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-sm">{popup.confirmText || '确定'}</Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Check className="w-10 h-10 text-emerald-400 mx-auto" />
-                  <h3 className="text-base font-bold text-white">{popup.title}</h3>
-                  <p className="text-sm text-slate-400 whitespace-pre-line">{popup.desc}</p>
-                  <Button onClick={() => setPopup(null)} className="bg-indigo-600 hover:bg-indigo-700 w-full h-9 text-sm">知道了</Button>
-                </>
+              {/* 交互模式提示 */}
+              {isMoveMode && (
+                <text x={50} y={5} textAnchor="middle" fontSize="3.5" fill="#818cf8" fontWeight="600"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                  选择高亮地点进行移动
+                </text>
               )}
-            </CardContent>
-          </Card>
+              {isTargetingMode && selectedSkill && (
+                <text x={50} y={5} textAnchor="middle" fontSize="3.5" fill="#f59e0b" fontWeight="600"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                  选择目标 — {selectedSkill.name}
+                </text>
+              )}
+            </svg>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <MapPin className="w-10 h-10 text-slate-700" />
+            </div>
+          )}
+
+          {/* 取消交互按钮 */}
+          {(isMoveMode || isTargetingMode) && (
+            <button onClick={resetInteraction}
+              className="absolute top-3 right-3 bg-slate-800/90 backdrop-blur rounded-lg px-3 py-1.5
+                         border border-slate-600 text-xs text-slate-300 flex items-center gap-1.5
+                         hover:bg-slate-700 transition-colors z-10">
+              <X className="w-3.5 h-3.5" />取消
+            </button>
+          )}
         </div>
-      )}
+
+        {/* ═══ 地点信息面板 ═══ */}
+        <div className="shrink-0 px-3 py-2 bg-slate-800/60 border-t border-slate-700">
+          {infoLocation ? (
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white">
+                    {infoLocation.name}
+                  </span>
+                  {infoLocation.id === currentPlayer?.locationId && (
+                    <Badge className="text-[9px] h-4 bg-indigo-600/80 text-indigo-200 border-0">你在这里</Badge>
+                  )}
+                  {infoLocation.isBlocked && (
+                    <Badge className="text-[9px] h-4 bg-red-600/80 text-red-200 border-0">封锁中</Badge>
+                  )}
+                </div>
+                {infoLocation.effect && infoLocation.effect.type !== 'placeholder' && (
+                  <p className="text-[11px] text-amber-400/90 mt-0.5">
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    {infoLocation.effect.name} — {infoLocation.effect.description}
+                  </p>
+                )}
+                {infoPlayers.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <Users className="w-3 h-3 text-slate-500" />
+                    {infoPlayers.map(p => {
+                      const isMe = p.id === currentPlayer?.id
+                      const pHero = p.heroId ? getHeroById(p.heroId) : null
+                      return (
+                        <Badge key={p.id} variant="outline"
+                          className={`text-[10px] h-5 px-1.5 gap-1 ${isMe ? 'border-indigo-600 text-indigo-300 bg-indigo-900/30' : 'border-slate-600 text-slate-300'}`}>
+                          <span className="w-3.5 h-3.5 rounded-full text-[7px] font-bold flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: pHero?.color || '#6366f1' }}>
+                            {players.indexOf(p) + 1}
+                          </span>
+                          {isMe ? '你' : p.name}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                )}
+                {infoPlayers.length === 0 && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">没有其他玩家在此地点</p>
+                )}
+              </div>
+              {selectedLocationId && selectedLocationId !== currentPlayer?.locationId && (
+                <button onClick={() => setSelectedLocationId(null)}
+                  className="text-[10px] text-slate-500 hover:text-white shrink-0 mt-1">
+                  返回当前位置
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">加载中...</p>
+          )}
+        </div>
+      </main>
+
+      {/* ═══ 底部操作栏 ═══ */}
+      <footer className="shrink-0 border-t border-slate-700 bg-slate-800/90">
+        <div className="flex items-center gap-2 px-3 py-2">
+          {/* 左：技能区（移动阶段技能 + 可用技能） */}
+          <div className="flex-1 min-w-0">
+            {availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
+              <div className="flex flex-wrap items-center gap-1">
+                <button onClick={() => setSkillsOpen(!skillsOpen)}
+                  className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 px-1.5 py-1 rounded hover:bg-slate-700/50 transition-colors">
+                  <Zap className="w-3 h-3" />
+                  技能
+                  {skillsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                </button>
+                {/* 显示前2个技能快捷按钮 */}
+                {!skillsOpen && availableSkills.slice(0, 2).map(s => (
+                  <button key={s.id} onClick={() => handleSkillClick(s)}
+                    className="text-[10px] px-2 py-1 rounded bg-slate-700/60 text-slate-300 hover:bg-slate-600 border border-slate-600 transition-colors">
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {skillsOpen && (
+              <div className="flex flex-wrap gap-1.5">
+                {availableSkills.map(s => (
+                  <button key={s.id} onClick={() => { handleSkillClick(s); setSkillsOpen(false) }}
+                    className="text-[10px] px-2 py-1 rounded bg-indigo-900/40 text-indigo-300 hover:bg-indigo-800/60 border border-indigo-700/50 transition-colors">
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 中：移动按钮 */}
+          {isMovePhase && !isMoveMode && !isTargetingMode && (
+            <button onClick={handleMoveClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium transition-colors">
+              <Footprints className="w-3.5 h-3.5" />
+              移动
+            </button>
+          )}
+
+          {/* 右：准备按钮 */}
+          <button onClick={handleReady}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0
+              ${isGameOver
+                ? 'bg-slate-600 hover:bg-slate-500 text-white'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              }`}>
+            <Check className="w-3.5 h-3.5" />
+            {isGameOver ? '返回大厅' : '准备'}
+          </button>
+        </div>
+      </footer>
+
+      {/* ═══ 弹窗 ═══ */}
+      {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
+        players={players} locations={locations} currentPhase={phase} />}
     </div>
   )
 }
 
-function ActionBtn({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
+// ═══════════════════════════════════════════════════
+//  弹窗覆盖层
+// ═══════════════════════════════════════════════════
+function PopupOverlay({
+  popup, onClose, players, locations, currentPhase
+}: {
+  popup: PopupState
+  onClose: () => void
+  players: any[]
+  locations: any[]
+  currentPhase: string
+}) {
+  if (popup.type === 'settings') {
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <Card className="bg-slate-800 border-slate-700 w-full max-w-sm max-h-[80vh]" onClick={e => e.stopPropagation()}>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Settings className="w-4 h-4 text-slate-400" />设置
+              </h3>
+              <button onClick={onClose} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <Separator className="bg-slate-700" />
+            <div className="space-y-3 text-sm text-slate-300">
+              <div className="flex items-center justify-between">
+                <span>音效</span>
+                <span className="text-slate-500 text-xs">开发中</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>版本</span>
+                <span className="text-slate-500 text-xs">v0.2.0 · 联机版</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>玩家数</span>
+                <span className="text-slate-500 text-xs">{players.length} 人</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>当前阶段</span>
+                <span className="text-slate-500 text-xs">{PHASE_LABEL[currentPhase] || '游戏中'}</span>
+              </div>
+            </div>
+            <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (popup.type === 'rules') {
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <Card className="bg-slate-800 border-slate-700 w-full max-w-md max-h-[85vh]" onClick={e => e.stopPropagation()}>
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-slate-400" />游戏规则 & 角色技能
+              </h3>
+              <button onClick={onClose} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <Separator className="bg-slate-700" />
+            <ScrollArea className="max-h-[55vh] pr-2">
+              <div className="space-y-4">
+                {/* 基本规则 */}
+                <div>
+                  <h4 className="text-sm font-bold text-indigo-400 mb-2">📖 基本规则</h4>
+                  <div className="text-xs text-slate-300 space-y-1.5">
+                    <p>• 游戏分为 <span className="text-red-400">杀手</span> 和 <span className="text-blue-400">平民</span> 两个阵营</p>
+                    <p>• 杀手在行动阶段可以攻击同房间的玩家</p>
+                    <p>• 结算阶段统一处理伤害，有功夫则反杀攻击者</p>
+                    <p>• 玩家在移动阶段可移动到相邻地点</p>
+                    <p>• 4轮探查/行动/移动后进入发言和投票阶段</p>
+                    <p>• 投票淘汰票数最高的玩家</p>
+                  </div>
+                </div>
+
+                {/* 地点效果 */}
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-400 mb-2">🗺️ 地点效果</h4>
+                  <div className="text-xs text-slate-300 space-y-1.5">
+                    <p><span className="text-amber-400">⛑️ 阿萨姆疯人院</span> — 杀手在此攻击不消耗次数</p>
+                    <p><span className="text-amber-400">🌳 中心公园</span> — 永远不会被封锁</p>
+                    <p><span className="text-amber-400">🛍️ 商业街</span> — 平民无法看到周围的人</p>
+                    <p><span className="text-amber-400">🏛️ 凌宇神社</span> — 可查看地点经过人员</p>
+                    <p><span className="text-amber-400">🏥 疾控中心</span> — 平民死亡会变为杀手</p>
+                    <p><span className="text-amber-400">🌉 志成桥</span> — 单向通行</p>
+                    <p><span className="text-amber-400">🚔 一大队</span> — 禁止攻击</p>
+                    <p><span className="text-amber-400">🌲 南翠屏公园</span> — 连锁死亡</p>
+                  </div>
+                </div>
+
+                {/* 英雄技能 */}
+                <div>
+                  <h4 className="text-sm font-bold text-purple-400 mb-2">⚡ 英雄技能</h4>
+                  <div className="space-y-2">
+                    {HERO_POOL.map(hero => (
+                      <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                            style={{ backgroundColor: hero.color }}>
+                            {hero.name.charAt(0)}
+                          </div>
+                          <span className="text-xs font-bold text-white">{hero.name}</span>
+                          <span className="text-[10px] text-slate-500">{hero.title}</span>
+                          <Badge variant="outline" className="text-[9px] h-4 ml-auto border-slate-600 text-slate-400">
+                            速{hero.speed}
+                          </Badge>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mb-1">{hero.description}</p>
+                        {hero.skills.map(s => (
+                          <div key={s.id} className="flex items-start gap-1.5 text-[10px] text-slate-300">
+                            <span className="text-amber-400 shrink-0 mt-0.5">◆</span>
+                            <div>
+                              <span className="font-medium text-amber-300">{s.name}</span>
+                              <span className="text-slate-500 ml-1">
+                                ({s.targetType === 'self' ? '自身' : s.targetType === 'same_location_player' ? '同房间' : s.targetType === 'any_player' ? '任意' : s.targetType === 'adjacent_location' ? '相邻地点' : '特殊'}
+                                · {s.limit === 'once_per_game' ? '全局1次' : s.limit === 'once_per_round' ? '每轮1次' : '无限'})
+                              </span>
+                              <p className="text-slate-400">{s.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+            <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <Button variant="outline" onClick={onClick}
-      className="h-12 flex flex-col items-center justify-center gap-0.5 border-slate-600 hover:border-indigo-500 hover:bg-slate-700 p-1">
-      <Icon className="w-4 h-4 text-slate-300" />
-      <span className="text-[9px] text-slate-400">{label}</span>
-    </Button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card className="bg-slate-800 border-slate-700 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+        <CardContent className="p-5 text-center space-y-4">
+          {popup.type === 'confirm' ? (
+            <>
+              <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
+              <h3 className="text-base font-bold text-white whitespace-pre-line">{popup.title}</h3>
+              <div className="flex gap-3 pt-1">
+                <Button variant="outline" onClick={onClose}
+                  className="flex-1 border-slate-600 text-slate-300 h-9 text-sm">取消</Button>
+                <Button onClick={() => { popup.onConfirm?.(); onClose() }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-sm">{popup.confirmText || '确定'}</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Check className="w-10 h-10 text-emerald-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">{popup.title}</h3>
+              {popup.desc && <p className="text-sm text-slate-400 whitespace-pre-line">{popup.desc}</p>}
+              <Button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 w-full h-9 text-sm">知道了</Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
