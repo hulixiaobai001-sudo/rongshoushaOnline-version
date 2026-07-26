@@ -554,6 +554,8 @@ ${skill.description}`)
             players={players} locations={locations} alivePlayers={alivePlayers}
             onNextPhase={handleReady}
           />
+        ) : phase === 'end' ? (
+          <EndGameSection players={players} alivePlayers={alivePlayers} />
         ) : (
           <>
           <div className="flex-1 p-2 min-h-0 relative">
@@ -988,6 +990,46 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
 }
 
 // ═══════════════════════════════════════════════════
+//  游戏结束组件
+// ═══════════════════════════════════════════════════
+function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayers: any[] }) {
+  const store = useGameStore()
+  const winner = store.winner
+  if (!winner) return null
+  
+  const aliveKillers = players.filter((p: any) => p.status === 'alive' && p.identity === 'killer')
+  const aliveCivs = players.filter((p: any) => p.status === 'alive' && p.identity === 'civilian')
+  const winnerPlayers = winner === 'good' ? aliveCivs : aliveKillers
+  const winnerSide = winner === 'good' ? '好人阵营' : '杀手阵营'
+  const winnerIcon = winner === 'good' ? '👑' : '🗡️'
+  
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-4 bg-gradient-to-b from-slate-900 via-indigo-950/30 to-slate-900">
+      <div className="text-7xl mb-2 animate-pulse">{winnerIcon}</div>
+      <h2 className="text-2xl font-bold text-white">{winnerSide} 胜利！</h2>
+      <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-6 py-3 text-center max-w-xs">
+        <p className="text-sm text-slate-300">
+          {winner === 'good' ? '🔴 所有杀手已被消灭' : '🔵 平民已被全部消灭'}
+        </p>
+        <p className="text-xs text-slate-500 mt-1">存活 {alivePlayers.length} / {players.length}</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2 text-xs">
+        {players.filter((p: any) => p.status === 'alive').map((p: any) => (
+          <span key={p.id} className="text-slate-300 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700">
+            {p.name} {p.identity === 'killer' ? '🔴' : '🔵'}
+          </span>
+        ))}
+      </div>
+      <div className="text-[10px] text-slate-600">游戏结束</div>
+      <button onClick={() => window.location.reload()}
+        className="mt-2 px-8 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-sm font-bold text-white transition-all shadow-lg shadow-indigo-900/30">
+        返回大厅
+      </button>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
 function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
@@ -1092,7 +1134,8 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
   const deadPlayers = players.filter((p: any) => p.status === 'dead')
   const newlyDead = deadPlayers.filter((p: any) => p.isRevealed)
   const votedOut = newlyDead.slice(-3)
-  const winner = useGameStore.getState().winner
+  const store2 = useGameStore()
+  const winner = store2.winner
 
   // 统计谁投了谁
   const voteMap: Record<string, string[]> = {}
@@ -1361,7 +1404,7 @@ function PopupOverlay({
               </div>
               <div className="flex items-center justify-between">
                 <span>版本</span>
-                <span className="text-slate-500 text-xs">v0.2.0 · 联机版</span>
+                <span className="text-slate-500 text-xs">MVP 0.0.1v-内测工作室测试</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>玩家数</span>
