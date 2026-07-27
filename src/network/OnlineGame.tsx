@@ -80,6 +80,7 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [hasMoved, setHasMoved] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
 
@@ -574,6 +575,16 @@ ${skill.description}`)
           <BookOpen className="w-4 h-4" />
         </button>
       </header>
+      {/* 通知条 */}
+      {toast && (
+        <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200 flex items-center justify-between">
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="text-amber-400 hover:text-amber-200 ml-2">✕</button>
+        </div>
+      )}
+      <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200">
+        💡 地点效果提示：一大队禁武、疾控中心变异、南翠屏连锁死亡等
+      </div>
 
       {/* ═══ 主内容区域 ═══ */}
       <main className="flex-[2] flex flex-col min-h-0">
