@@ -394,7 +394,9 @@ export const useGameStore = create<GameStore>()(
         if (hasManual) { state.phase = 'identity'; return; }
         const totalPlayers = state.players.length;
         if (totalPlayers === 0) return;
-        const dynamicKillers = Math.max(1, Math.floor(totalPlayers / 2));
+        // 优先使用房主设置的 killerCount，否则动态计算（最多半数）
+        const useKillers = state.killerCount > 0 ? state.killerCount : Math.max(1, Math.floor(totalPlayers / 2));
+        const dynamicKillers = Math.min(useKillers, Math.floor(totalPlayers / 2));
         const dynamicCivilians = totalPlayers - dynamicKillers;
         const identities: Identity[] = [];
         for (let i = 0; i < dynamicKillers; i++) identities.push('killer');
