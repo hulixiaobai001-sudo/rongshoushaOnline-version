@@ -80,12 +80,14 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [hasMoved, setHasMoved] = useState(false)
+  const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set())
+  const [myReady, setMyReady] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
-  useEffect(() => { setHasMoved(false); setHasAttacked(false) }, [phase])
+  useEffect(() => { setHasMoved(false); setHasAttacked(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
 
   // 当前玩家（开发阶段固定为 players[0]）
   const currentPlayer = players && players.length > 0 ? players[0] : null
@@ -460,16 +462,36 @@ ${skill.description}`)
     })
   }
 
-  // ── 准备 ──
+  // ── 准备 / 就绪系统 ──
   const handleReady = () => {
     if (isGameOver) {
       confirm('返回大厅？', () => onLeave())
       return
     }
-    confirm('进入下一阶段？', () => {
+    // 标记自己已准备
+    setMyReady(true)
+    const newReady = new Set(readyPlayers)
+    if (currentPlayer) newReady.add(currentPlayer.id)
+    setReadyPlayers(newReady)
+    
+    // 自动将空壳玩家标记为已准备
+    alivePlayers.forEach(p => {
+      if (p.id.startsWith('bot_')) newReady.add(p.id)
+    })
+    setReadyPlayers(newReady)
+    
+    // 检查是否所有存活玩家都已准备
+    const aliveIds = new Set(alivePlayers.map(p => p.id))
+    const allReady = [...aliveIds].every(id => newReady.has(id))
+    
+    if (allReady) {
+      // 所有人就绪，推进阶段
       resetInteraction()
       nextPhase()
-    }, '确认')
+    } else {
+      const remaining = alivePlayers.length - newReady.size
+      info('等待就绪', `已就绪 ${newReady.size} / ${alivePlayers.length} 人，还剩 ${remaining} 人未准备`)
+    }
   }
 
   // ── 加载中 ──
@@ -988,12 +1010,13 @@ ${skill.description}`)
             </button>
           )}
 
-          {/* 右：准备按钮（仅在行动/移动阶段显示） */}
+          {/* 右：准备/就绪按钮 */}
           {!isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
             <button onClick={handleReady}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white">
-              <Check className="w-3.5 h-3.5" />
-              准备
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
+                myReady ? 'bg-emerald-700 text-emerald-200' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              }`}>
+              {myReady ? <span>✅ 已就绪 {readyPlayers.size}/{alivePlayers.length}</span> : <><Check className="w-3.5 h-3.5" />准备</>}
             </button>
           )}
 
