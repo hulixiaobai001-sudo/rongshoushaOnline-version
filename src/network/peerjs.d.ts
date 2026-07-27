@@ -1,4 +1,4 @@
-export function createRoom(): Promise<{ roomId: string; playerId: string; isHost: boolean }>
+export function createRoom(customId?: string): Promise<{ roomId: string; playerId: string; isHost: boolean }>
 export function joinRoom(roomId: string): Promise<{ roomId: string; playerId: string; isHost: boolean }>
 export function broadcast(data: Record<string, any>): void
 export function sendAction(action: string, data?: Record<string, any>): void
