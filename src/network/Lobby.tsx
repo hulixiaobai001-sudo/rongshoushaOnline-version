@@ -164,11 +164,14 @@ export function Lobby({ onBack }: LobbyProps) {
   }, [])
 
   useEffect(() => {
-    on('playerJoin', (playerId: string) => {
+    on('playerJoin', (playerId: string, name?: string) => {
       setPlayers((prev: string[]) => {
         if (!prev.includes(playerId)) return [...prev, playerId]
         return prev
       })
+      if (isSpectator) {
+        setStatus(prev => prev + `\n👁️ ${name || '观战者'} 以观战模式加入`)
+      }
     })
     on('playerLeave', (playerId: string) => {
       setPlayers((prev: string[]) => prev.filter((id: string) => id !== playerId))
@@ -176,7 +179,7 @@ export function Lobby({ onBack }: LobbyProps) {
     return () => { disconnect() }
   }, [])
 
-  const handleCreateRoom = async () => {
+  const handleCreateRoom = async (customCode?: string) => {
     if (connectingRef.current) return
     // 检查房主名
     let name = myName
@@ -190,7 +193,7 @@ export function Lobby({ onBack }: LobbyProps) {
     setLoading(true)
     setStatus('正在创建房间...')
     try {
-      const room = await createRoom()
+      const room = await createRoom(customCode)
       setMode('host')
       setRoomCode(room.roomId)
       setPlayers([room.playerId])
@@ -259,18 +262,20 @@ export function Lobby({ onBack }: LobbyProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // 调试模式：用空壳玩家填充
+  // 调试模式：用空壳玩家填充（不挤占已有联机玩家）
   const enterDebugMode = () => {
-    const botCount = 7
-    const botIds = Array.from({ length: botCount }, (_, i) => `bot_${i + 1}`)
-    const botNames = Array.from({ length: botCount }, (_, i) => `空壳玩家${i + 1}`)
-    setPlayers([players[0], ...botIds])
+    const existing = players.filter(p => !p.startsWith('bot_'))
+    const existingCount = existing.length
+    const needed = Math.max(0, 8 - existingCount) // 填充到8人
+    const botIds = Array.from({ length: needed }, (_, i) => `bot_${i + 1}`)
+    const botNames = Array.from({ length: needed }, (_, i) => `空壳玩家${i + 1}`)
+    setPlayers([...existing, ...botIds])
     setBotPlayerNames(botNames)
     const namesMap = {...playerNames}
     botIds.forEach((id, i) => { namesMap[id] = botNames[i] })
     setPlayerNames(namesMap)
     setDebugMode(true)
-    setStatus('调试模式已启动，已填充空壳玩家')
+    setStatus(`调试模式已启动（${existingCount}名联机玩家 + ${needed}个空壳）`)
   }
 
   const handleStartGame = () => {
@@ -375,7 +380,16 @@ export function Lobby({ onBack }: LobbyProps) {
                 ⚠️ 联机大厅开发中，当前通过房间码加入游戏
               </div>
 
-              <Button onClick={handleCreateRoom} disabled={loading}
+              {/* 自定义房间码 */}
+              <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-2 border border-slate-700">
+                <input id="roomCodeInput" placeholder="输入房间码（可选，留空自动生成）" maxLength={12}
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateRoom() }} />
+              </div>
+              <Button onClick={() => {
+                const input = (document.getElementById('roomCodeInput') as HTMLInputElement)?.value?.trim()
+                handleCreateRoom(input)
+              }} disabled={loading}
                 className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
                 {loading ? '创建中...' : '创建房间（房主）'}
               </Button>
@@ -387,7 +401,10 @@ export function Lobby({ onBack }: LobbyProps) {
                   <p className="text-xs text-slate-500">以观众身份加入，仅可观看无法操作</p>
                 </div>
                 <Button variant={isSpectator ? 'default' : 'outline'} size="sm"
-                  onClick={() => setIsSpectator(!isSpectator)}
+                  onClick={() => {
+                    setIsSpectator(!isSpectator)
+                    if (!isSpectator) alert('观战模式开启后，房主将收到你的观战加入通知')
+                  }}
                   className={isSpectator ? 'bg-emerald-600' : 'border-slate-600 text-slate-400'}>
                   {isSpectator ? '已开启' : '关闭'}
                 </Button>
