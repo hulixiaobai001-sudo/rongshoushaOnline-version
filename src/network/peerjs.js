@@ -47,7 +47,7 @@ function loadPeerJS() {
 /**
  * 创建房间（房主）
  */
-export async function createRoom(customId?: string) {
+export async function createRoom(customId) {
   await loadPeerJS()
   
   return new Promise((resolve, reject) => {
