@@ -255,7 +255,6 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       setRoomCode(room.roomId)
       setStatus('已加入房间，等待房主开始游戏...')
       // 更新房间人数
-      const name2 = myName || localStorage.getItem('rs_player_name') || '玩家'
       updateRoomPlayerCount(room.roomId, 2)
       wsUpdateRoom(room.roomId, 2)
     } catch (e: unknown) {
