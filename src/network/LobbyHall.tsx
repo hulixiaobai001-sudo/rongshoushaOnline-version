@@ -15,6 +15,7 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
   const [rooms, setRooms] = useState<PublicRoom[]>([])
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(false)
+  const [selectedRoom, setSelectedRoom] = useState<PublicRoom | null>(null)
 
   useEffect(() => {
     // 实时订阅
@@ -114,10 +115,10 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
                         </span>
                       </div>
                     </div>
-                    <Button size="sm" onClick={() => onJoinRoom(room.roomId)}
+                    <Button size="sm" onClick={() => setSelectedRoom(room)}
                       disabled={room.playerCount >= room.maxPlayers}
                       className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs shrink-0">
-                      加入
+                      查看
                     </Button>
                   </CardContent>
                 </Card>
@@ -126,6 +127,38 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
           )}
         </div>
       </main>
+
+      {/* 房间详情弹窗 */}
+      {selectedRoom && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setSelectedRoom(null)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 w-full max-w-xs space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">房间详情</h3>
+              <button onClick={() => setSelectedRoom(null)} className="text-slate-500 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-400">房主</span><span className="text-white">{selectedRoom.hostName}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">房间码</span><span className="text-white font-mono">{selectedRoom.roomId}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">人数</span><span className="text-white">{selectedRoom.playerCount}/{selectedRoom.maxPlayers}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">类型</span>
+                <span className={selectedRoom.hasPassword ? 'text-amber-400' : 'text-emerald-400'}>
+                  {selectedRoom.hasPassword ? '🔒 私密房间' : '🌐 公开房间'}
+                </span>
+              </div>
+              <div className="flex justify-between"><span className="text-slate-400">观战</span>
+                <span className="text-slate-300">待加入后确认</span>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setSelectedRoom(null)}
+                className="flex-1 border-slate-600 text-slate-300 h-9 text-sm">取消</Button>
+              <Button onClick={() => { onJoinRoom(selectedRoom.roomId); setSelectedRoom(null) }}
+                disabled={selectedRoom.playerCount >= selectedRoom.maxPlayers}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-sm">加入房间</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

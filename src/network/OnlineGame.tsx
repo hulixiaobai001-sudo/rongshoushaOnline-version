@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations } from '@/data/gameData'
+import { unregisterRoom, wsUnregisterRoom } from './roomServer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -94,6 +95,17 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
 
   // ── 阶段信息 ──
+  // 游戏结束时注销房间（不再显示在大厅）
+  useEffect(() => {
+    if (phase === 'end') {
+      const roomId = (() => { try { return localStorage.getItem('rs_room_code') } catch { return null } })()
+      if (roomId) {
+        unregisterRoom(roomId)
+        wsUnregisterRoom(roomId)
+      }
+    }
+  }, [phase])
+
   const phaseLabel = PHASE_LABEL[phase] || phase
   const day = PHASE_DAY_MAP[phase] ?? null
   const isMovePhase = phase.startsWith('move')
@@ -801,7 +813,13 @@ ${skill.description}`)
                   style={{ pointerEvents: 'none', userSelect: 'none' }}>
                   {selectedSkill.id === 'zhangyang_cut_connection'
                     ? (cutPair.length === 0 ? '点击第一个地点（断路）' : '点击第二个地点（断路）')
-                    : `选择目标 — ${selectedSkill.name}`}
+                    : selectedSkill.targetType === 'adjacent_location'
+                      ? '点击一个相邻地点 — ' + selectedSkill.name
+                      : selectedSkill.targetType === 'same_location_player'
+                        ? '点击同房间的玩家 — ' + selectedSkill.name
+                        : selectedSkill.targetType === 'any_player'
+                          ? '点击任意玩家 — ' + selectedSkill.name
+                          : `选择目标 — ${selectedSkill.name}`}
                 </text>
               )}
             </svg>
@@ -831,8 +849,13 @@ ${skill.description}`)
               {currentPlayer && infoLocation?.effect?.type === 'shrine_vision' && infoLocation.id === currentPlayer.locationId && (
                 <button onClick={() => {
                   const visits = store.locationVisits?.[infoLocation.id] || []
-                  const names = visits.map((id: string) => players.find((p: any) => p.id === id)).filter(Boolean).map((p: any) => p.name)
-                  info('🏛️ 凌宇神社 · 神视', names.length > 0 ? '本轮经过此地的玩家：' + names.join('、') : '本轮无人经过此地')
+                  const visitNames = visits.map((id: string) => players.find((p: any) => p.id === id)).filter(Boolean).map((p: any) => p.name)
+                  const currentHere = players.filter((p: any) => p.locationId === infoLocation.id && p.status === 'alive').map((p: any) => p.name)
+                  const all = [...new Set([...currentHere, ...visitNames])]
+                  info('🏛️ 凌宇神社 · 神视',
+                    '现在此地：' + (currentHere.join('、') || '无') +
+                    (visitNames.length > 0 ? '\n\n本轮经过：' + visitNames.join('、') : '\n\n本轮经过：无')
+                  )
                 }}
                   className="w-full text-left text-[9px] px-2 py-1 rounded mb-1.5 bg-purple-900/40 text-purple-400 border border-purple-800/50 hover:bg-purple-800/50 transition-colors">
                   🏛️ 神视 - 查看经过记录
