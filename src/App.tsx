@@ -8,6 +8,7 @@ type AppMode = 'menu' | 'online_hall' | 'online_host' | 'online_player';
 
 function App() {
   const [appMode, setAppMode] = useState<AppMode>('menu');
+  const [quickJoinCode, setQuickJoinCode] = useState<string>('');
 
   if (appMode === 'menu') {
     return (
@@ -28,7 +29,7 @@ function App() {
           </Button>
 
           <div className="text-center text-[10px] text-slate-600 mt-4">
-            通过 WiFi P2P 直连，无需服务器 · 开发中
+            P2P 直连 · 建议每房间不超过10人 · 通过房间码加入
           </div>
         </div>
       </div>
@@ -36,11 +37,20 @@ function App() {
   }
 
   if (appMode === 'online_hall') {
-    return <LobbyHall onCreateRoom={() => setAppMode('online_host')} onBack={() => setAppMode('menu')} />;
+    return (
+      <LobbyHall
+        onCreateRoom={() => setAppMode('online_host')}
+        onBack={() => setAppMode('menu')}
+        onJoinRoom={(roomId) => {
+          setQuickJoinCode(roomId);
+          setAppMode('online_player');
+        }}
+      />
+    );
   }
 
   if (appMode === 'online_host' || appMode === 'online_player') {
-    return <Lobby onBack={() => setAppMode('online_hall')} />;
+    return <Lobby onBack={() => setAppMode('online_hall')} quickJoinCode={quickJoinCode} />;
   }
 
   return null;

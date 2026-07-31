@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/badge'
 import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye, Bug } from 'lucide-react'
 import { OnlineGame } from './OnlineGame'
 import { useGameStore } from '@/store/gameStore'
+import { registerRoom, updateRoomPlayerCount, unregisterRoom, wsRegisterRoom, wsUpdateRoom, wsUnregisterRoom, closeRoomSocket } from './roomServer'
 
 interface LobbyProps {
   onBack: () => void
+  quickJoinCode?: string
 }
 
 const DEBUG_PHRASE = '柯基不爱喝茶'
@@ -134,10 +136,12 @@ function DebugSettings() {
   )
 }
 
-export function Lobby({ onBack }: LobbyProps) {
+export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [mode, setMode] = useState<'host' | 'join' | null>(null)
   const [roomCode, setRoomCode] = useState('')
   const [inputCode, setInputCode] = useState('')
+  const [roomPublic, setRoomPublic] = useState(true)
+  const [roomPassword, setRoomPassword] = useState('')
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
@@ -152,10 +156,17 @@ export function Lobby({ onBack }: LobbyProps) {
   const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
   const connectingRef = useRef(false)
 
-  // 防刷新：恢复玩家名，显示重连提示
+  // 防刷新：恢复玩家名，显示重连提示；支持从大厅快速加入
   useEffect(() => {
     const savedName = localStorage.getItem('rs_player_name')
     if (savedName) setMyName(savedName)
+    if (quickJoinCode) {
+      setInputCode(quickJoinCode)
+      setStatus('正在加入房间 ' + quickJoinCode + ' ...')
+      // 延迟一下让组件先渲染
+      const t = setTimeout(() => { handleJoinRoom() }, 300)
+      return () => clearTimeout(t)
+    }
     const savedRoom = localStorage.getItem('rs_room_code')
     if (savedRoom) {
       setInputCode(savedRoom)
@@ -201,6 +212,18 @@ export function Lobby({ onBack }: LobbyProps) {
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', room.roomId)
       localStorage.setItem('rs_room_role', 'host')
+      // 注册到房间服务器（公开房间显示在大厅）
+      const regData = {
+        roomId: room.roomId,
+        hostId: room.playerId,
+        hostName: name,
+        playerCount: 1,
+        maxPlayers: 8,
+        isPublic: roomPublic,
+        hasPassword: !!roomPassword,
+      }
+      registerRoom(regData)
+      wsRegisterRoom(regData)
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
       setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
@@ -231,6 +254,10 @@ export function Lobby({ onBack }: LobbyProps) {
       setMode('join')
       setRoomCode(room.roomId)
       setStatus('已加入房间，等待房主开始游戏...')
+      // 更新房间人数
+      const name2 = myName || localStorage.getItem('rs_player_name') || '玩家'
+      updateRoomPlayerCount(room.roomId, 2)
+      wsUpdateRoom(room.roomId, 2)
     } catch (e: unknown) {
       setStatus('加入失败：' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
@@ -240,6 +267,12 @@ export function Lobby({ onBack }: LobbyProps) {
   }
 
   const handleLeaveRoom = () => {
+    // 注销房间（仅房主）
+    if (roomCode && mode === 'host') {
+      unregisterRoom(roomCode)
+      wsUnregisterRoom(roomCode)
+    }
+    closeRoomSocket()
     disconnect()
     setMode(null)
     setRoomCode('')
@@ -366,19 +399,24 @@ export function Lobby({ onBack }: LobbyProps) {
                 <p className="text-xs text-slate-400 mt-1">通过 WiFi 进行 P2P 直连，无需服务器</p>
               </div>
 
-              {/* 房间可见性（开发中） */}
-              <div className="flex items-center gap-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 opacity-60"
-                title="联机大厅功能开发中，当前房间通过房间码加入">
-                <span className="text-sm text-slate-400 shrink-0">🔒 房间</span>
+              {/* 房间可见性 */}
+              <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-3 border border-slate-700">
+                <span className="text-sm text-slate-300 shrink-0">🔒 房间</span>
                 <div className="flex-1" />
                 <div className="flex gap-1 bg-slate-900 rounded-lg p-0.5">
-                  <button className="px-3 py-1 rounded-md text-xs text-slate-500">公开</button>
-                  <button className="px-3 py-1 rounded-md text-xs bg-slate-800 text-slate-600">私密</button>
+                  <button onClick={() => setRoomPublic(true)}
+                    className={`px-3 py-1 rounded-md text-xs ${roomPublic ? 'bg-emerald-700 text-white' : 'text-slate-400'}`}>公开</button>
+                  <button onClick={() => setRoomPublic(false)}
+                    className={`px-3 py-1 rounded-md text-xs ${!roomPublic ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>私密</button>
                 </div>
               </div>
-              <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2 text-[10px] text-amber-400/70 text-center">
-                ⚠️ 联机大厅开发中，当前通过房间码加入游戏
-              </div>
+              {!roomPublic && (
+                <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-2 border border-slate-700">
+                  <input value={roomPassword} onChange={(e) => setRoomPassword(e.target.value)} maxLength={12}
+                    placeholder="房间密码（可选）"
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none" />
+                </div>
+              )}
 
               {/* 自定义房间码 */}
               <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-2 border border-slate-700">
