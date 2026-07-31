@@ -236,6 +236,12 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
         return
       }
       // 如果是 location 类型的目标（如大力射门选相邻地点）
+      if (selectedSkill.id === 'wangli_big_shot') {
+        const isAdjacent = currentLoc.connectedTo.includes(locId)
+        if (!isAdjacent) { info('无法使用', '只能选择相邻地点'); return }
+        confirm(`对 ${targetLoc.name} 大力射门？`, () => handleSkillUse(selectedSkill, undefined, locId))
+        return
+      }
       handleSkillUse(selectedSkill, undefined, locId)
     }
   }
@@ -269,6 +275,14 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
     switch (skill.targetType) {
       case 'self':
         confirm(`使用【${skill.name}】？\n${skill.description}`, () => handleSkillUse(skill))
+        break
+      case 'location_pair':
+        // 断路：直接进入选点模式
+        setCutPair([])
+        setInteraction('skill_target')
+        setSelectedSkill(skill)
+        setSkillsOpen(false)
+        info('🚧 断路', '在地图上依次点击两个有道路相连的地点，切断它们之间的路')
         break
       case 'same_location_player':
         if (sameLocationPlayers.length === 0) {
@@ -474,9 +488,10 @@ ${skill.description}`)
     if (currentPlayer) newReady.add(currentPlayer.id)
     setReadyPlayers(newReady)
     
-    // 自动将空壳玩家标记为已准备
+    // 自动将空壳玩家标记为已准备（bot_ 开头 或 调试模式下的非当前玩家）
+    const isDebug = botNames && botNames.length > 0
     alivePlayers.forEach(p => {
-      if (p.id.startsWith('bot_')) newReady.add(p.id)
+      if (p.id.startsWith('bot_') || (isDebug && p.id !== currentPlayer?.id)) newReady.add(p.id)
     })
     setReadyPlayers(newReady)
     
@@ -781,7 +796,9 @@ ${skill.description}`)
               {isTargetingMode && selectedSkill && (
                 <text x={50} y={5} textAnchor="middle" fontSize="3.5" fill="#f59e0b" fontWeight="600"
                   style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                  选择目标 — {selectedSkill.name}
+                  {selectedSkill.id === 'zhangyang_cut_connection'
+                    ? (cutPair.length === 0 ? '点击第一个地点（断路）' : '点击第二个地点（断路）')
+                    : `选择目标 — ${selectedSkill.name}`}
                 </text>
               )}
             </svg>
