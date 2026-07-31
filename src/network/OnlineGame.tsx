@@ -237,9 +237,12 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
       }
       // 如果是 location 类型的目标（如大力射门选相邻地点）
       if (selectedSkill.id === 'wangli_big_shot') {
-        const isAdjacent = currentLoc.connectedTo.includes(locId)
+        const curLoc = locations.find(l => l.id === currentPlayer?.locationId)
+        const tgtLoc = locations.find(l => l.id === locId)
+        if (!curLoc || !tgtLoc) return
+        const isAdjacent = curLoc.connectedTo.includes(locId)
         if (!isAdjacent) { info('无法使用', '只能选择相邻地点'); return }
-        confirm(`对 ${targetLoc.name} 大力射门？`, () => handleSkillUse(selectedSkill, undefined, locId))
+        confirm(`对 ${tgtLoc.name} 大力射门？`, () => handleSkillUse(selectedSkill, undefined, locId))
         return
       }
       handleSkillUse(selectedSkill, undefined, locId)
