@@ -851,7 +851,6 @@ ${skill.description}`)
                   const visits = store.locationVisits?.[infoLocation.id] || []
                   const visitNames = visits.map((id: string) => players.find((p: any) => p.id === id)).filter(Boolean).map((p: any) => p.name)
                   const currentHere = players.filter((p: any) => p.locationId === infoLocation.id && p.status === 'alive').map((p: any) => p.name)
-                  const all = [...new Set([...currentHere, ...visitNames])]
                   info('🏛️ 凌宇神社 · 神视',
                     '现在此地：' + (currentHere.join('、') || '无') +
                     (visitNames.length > 0 ? '\n\n本轮经过：' + visitNames.join('、') : '\n\n本轮经过：无')
