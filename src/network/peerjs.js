@@ -51,7 +51,7 @@ export async function createRoom(customId) {
   await loadPeerJS()
   
   return new Promise((resolve, reject) => {
-    const roomId = customId || generateId()
+    let roomId = customId || generateId()
     peer = new Peer(roomId, {
       host: PEERJS_HOST,
       port: PEERJS_PORT,
