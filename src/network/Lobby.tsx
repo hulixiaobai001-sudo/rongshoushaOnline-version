@@ -145,7 +145,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
-  const [myName, setMyName] = useState(() => localStorage.getItem('rs_player_name') || '')
+  const [myName, setMyName] = useState(() => {
+    try { return localStorage.getItem('rs_player_name') || '' } catch { return '' }
+  })
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showWarning, setShowWarning] = useState(true)

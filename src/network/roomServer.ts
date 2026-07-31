@@ -4,10 +4,19 @@
 // 服务器地址自动取当前页面域名（Railway 同源部署）
 // ============================================
 
+/** 安全读取 localStorage（隐私模式会抛异常） */
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 /** 自动推断服务器地址（同源部署时用当前 host） */
 function getServerBase(): string {
   // 支持手动覆盖（存 localStorage 方便调试）
-  const override = localStorage.getItem('rs_server_base');
+  const override = safeGet('rs_server_base');
   if (override) return override.replace(/\/$/, '');
   return window.location.origin;
 }
