@@ -279,8 +279,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       // 房主心跳：每30秒更新，服务器检测到房主失联会清理房间
       if (roomHeartbeatRef.current) clearInterval(roomHeartbeatRef.current)
       roomHeartbeatRef.current = setInterval(() => {
-        updateRoomPlayerCount(room.roomId, store.players.length || 1)
-        wsUpdateRoom(room.roomId, store.players.length || 1)
+        updateRoomPlayerCount(room.roomId, players.length || 1)
+        wsUpdateRoom(room.roomId, players.length || 1)
       }, 15000)
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
