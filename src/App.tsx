@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { LobbyHall } from '@/network/LobbyHall';
 import { Lobby } from '@/network/Lobby';
 import { Admin } from '@/admin/Admin';
@@ -10,23 +10,8 @@ type AppMode = 'menu' | 'online_hall' | 'online_host' | 'online_player' | 'admin
 function App() {
   const [appMode, setAppMode] = useState<AppMode>('menu');
   const [quickJoinCode, setQuickJoinCode] = useState<string>('');
-  const [announcement, setAnnouncement] = useState('');
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // 拉取公告
-  useEffect(() => {
-    const fetchAnnouncement = async () => {
-      try {
-        const res = await fetch(window.location.origin + '/api/announcement');
-        const data = await res.json();
-        if (data.ok && data.announcement) setAnnouncement(data.announcement);
-      } catch {
-        // 服务器不可用则忽略
-      }
-    };
-    fetchAnnouncement();
-  }, []);
 
   // 隐藏入口：连点🦊logo 5次打开后台
   const handleLogoClick = () => {
@@ -52,12 +37,6 @@ function App() {
             <h1 className="text-3xl font-bold text-white">绒兽杀</h1>
             <p className="text-sm text-slate-400 mt-2">联机对战</p>
           </div>
-
-          {announcement && (
-            <div className="bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2.5 text-[11px] text-amber-300/90">
-              📢 {announcement}
-            </div>
-          )}
 
           <Button
             onClick={() => setAppMode('online_hall')}

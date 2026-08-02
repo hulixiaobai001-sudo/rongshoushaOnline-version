@@ -16,8 +16,13 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<PublicRoom | null>(null)
+  const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
+    // 拉取公告
+    fetch(window.location.origin + '/api/announcement').then(r => r.json()).then(d => {
+      if (d.ok && d.announcement) setAnnouncement(d.announcement)
+    }).catch(() => {})
     // 实时订阅
     const unsub = subscribeRoomList((list) => {
       setRooms(list)
@@ -51,6 +56,13 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
           <Plus className="w-3.5 h-3.5 mr-1" />创建房间
         </Button>
       </header>
+
+      {/* 公告条 */}
+      {announcement && (
+        <div className="shrink-0 bg-amber-900/25 border-b border-amber-800/40 px-4 py-2 text-[11px] text-amber-300/90">
+          📢 {announcement}
+        </div>
+      )}
 
       {/* 搜索框 */}
       <div className="px-3 md:px-4 py-3">
