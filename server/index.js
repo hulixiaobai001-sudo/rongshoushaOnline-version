@@ -25,7 +25,7 @@ function generateId(len = 8) {
 
 function cleanupExpiredRooms() {
   const now = Date.now();
-  const EXPIRY = 1000 * 90; // 90秒无心跳自动清除（房主失联时清理房间）
+  const EXPIRY = 1000 * 45; // 45秒无心跳自动清除（3次心跳间隔）
   rooms.forEach((room, roomId) => {
     if (now - room.updatedAt > EXPIRY) {
       rooms.delete(roomId);

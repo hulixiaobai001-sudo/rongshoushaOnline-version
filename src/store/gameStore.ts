@@ -68,6 +68,8 @@ interface GameStore extends GameState {
   addPlayer: (name: string) => void;
   removePlayer: (id: string) => void;
   updatePlayerName: (id: string, name: string) => void;
+  setPlayerIdentity: (id: string, identity: 'killer' | 'civilian') => void;
+  setPlayerHero: (id: string, heroId: string) => void;
 
   // 地图编辑
   addLocation: (name: string, x: number, y: number) => void;
@@ -153,6 +155,18 @@ export const useGameStore = create<GameStore>()(
 
     setCivilianCount: (count) =>
       set((state) => { state.civilianCount = Math.max(1, count); }),
+
+    setPlayerIdentity: (id, identity) =>
+      set((state) => {
+        const p = state.players.find((x) => x.id === id);
+        if (p) p.identity = identity;
+      }),
+
+    setPlayerHero: (id, heroId) =>
+      set((state) => {
+        const p = state.players.find((x) => x.id === id);
+        if (p) p.heroId = heroId;
+      }),
 
     addPlayer: (name) =>
       set((state) => {

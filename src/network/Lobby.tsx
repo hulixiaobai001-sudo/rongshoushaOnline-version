@@ -45,13 +45,12 @@ function RoleAssignmentPanel() {
     const current = editIdentity[playerId] || player.identity || 'civilian'
     const newId = current === 'killer' ? 'civilian' : 'killer'
     setEditIdentity({ ...editIdentity, [playerId]: newId })
-    player.identity = newId
+    store.setPlayerIdentity(playerId, newId)
   }
 
   const setPlayerHero = (playerId: string, heroId: string) => {
     setEditHero({ ...editHero, [playerId]: heroId })
-    const player = players.find((p: any) => p.id === playerId)
-    if (player) player.heroId = heroId
+    store.setPlayerHero(playerId, heroId)
   }
 
   const totalKillers = players.filter((p: any) => (editIdentity[p.id] || p.identity) === 'killer').length
@@ -121,8 +120,9 @@ function RoleAssignmentPanel() {
             {/* 快速填充 */}
             {players.length < 4 && (
               <Button variant="outline" size="sm" onClick={() => {
-                while (players.length < 4) {
-                  store.addPlayer(`玩家${players.length + 1}`)
+                const current = store.players.length
+                for (let i = current; i < 4; i++) {
+                  store.addPlayer(`玩家${i + 1}`)
                 }
               }} className="w-full h-7 text-[10px] border-indigo-700 text-indigo-400 hover:bg-indigo-950">
                 ⚡ 快速补满4人
@@ -279,9 +279,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       // 房主心跳：每30秒更新，服务器检测到房主失联会清理房间
       if (roomHeartbeatRef.current) clearInterval(roomHeartbeatRef.current)
       roomHeartbeatRef.current = setInterval(() => {
-        updateRoomPlayerCount(room.roomId, players.length || 1)
-        wsUpdateRoom(room.roomId, players.length || 1)
-      }, 30000)
+        updateRoomPlayerCount(room.roomId, store.players.length || 1)
+        wsUpdateRoom(room.roomId, store.players.length || 1)
+      }, 15000)
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
       setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
