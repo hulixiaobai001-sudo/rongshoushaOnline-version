@@ -123,14 +123,14 @@ function DebugSettings() {
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-300">平民人数</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => store.setCivilianCount(Math.max(2, civilianCount - 1))}
+            <button onClick={() => store.setCivilianCount(Math.max(3, civilianCount - 1))}
               className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">-</button>
             <span className="w-8 text-center text-sm font-bold text-white">{civilianCount}</span>
-            <button onClick={() => store.setCivilianCount(Math.min(10, civilianCount + 1))}
+            <button onClick={() => store.setCivilianCount(Math.min(8, civilianCount + 1))}
               className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">+</button>
           </div>
         </div>
-        <p className="text-[10px] text-slate-500">总计：{killerCount + civilianCount} 名玩家</p>
+        <p className="text-[10px] text-slate-500">总计：{killerCount + civilianCount} 名玩家（4-12人）</p>
       </CardContent>
     </Card>
   )
@@ -157,6 +157,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [inGame, setInGame] = useState(false)
   const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
   const connectingRef = useRef(false)
+  const roomHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 防刷新：恢复玩家名，显示重连提示；支持从大厅快速加入
   useEffect(() => {
@@ -188,6 +189,13 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     })
     on('playerLeave', (playerId: string) => {
       setPlayers((prev: string[]) => prev.filter((id: string) => id !== playerId))
+    })
+    // 玩家端：监听房主指令（收到 start_game 进入游戏）
+    on('hostCommand', (data: any) => {
+      if (data && (data.command === 'start_game' || data.type === 'start_game')) {
+        setStatus('房主已开始游戏！')
+        setInGame(true)
+      }
     })
     return () => { disconnect() }
   }, [])
@@ -226,6 +234,12 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       }
       registerRoom(regData)
       wsRegisterRoom(regData)
+      // 房主心跳：每30秒更新，服务器检测到房主失联会清理房间
+      if (roomHeartbeatRef.current) clearInterval(roomHeartbeatRef.current)
+      roomHeartbeatRef.current = setInterval(() => {
+        updateRoomPlayerCount(room.roomId, players.length || 1)
+        wsUpdateRoom(room.roomId, players.length || 1)
+      }, 30000)
       setStatus('房间已创建，等待玩家加入...')
     } catch (e: unknown) {
       setStatus('创建失败：' + (e instanceof Error ? e.message : '未知错误'))
@@ -268,6 +282,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleLeaveRoom = () => {
+    // 清理心跳
+    if (roomHeartbeatRef.current) { clearInterval(roomHeartbeatRef.current); roomHeartbeatRef.current = null }
     // 注销房间（仅房主）
     if (roomCode && mode === 'host') {
       unregisterRoom(roomCode)
