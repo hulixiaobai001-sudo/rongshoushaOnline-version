@@ -129,10 +129,28 @@ export function OnlineGame({ botNames, onLeave }: OnlineGameProps) {
   // ── 初始化：组件挂载时初始化游戏 ──
   useEffect(() => {
     try {
-      const names = botNames && botNames.length > 0 ? botNames
-        : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+      // 保存房主配置的玩家（名字+身份+英雄），进入游戏不覆盖
+      const configured = store.players && store.players.length > 0
+        ? store.players.map((p: any) => ({ name: p.name, identity: p.identity, heroId: p.heroId }))
+        : null
       store.resetGame()
-      names.forEach(n => store.addPlayer(n))
+      
+      if (configured && configured.length >= 4) {
+        // 用房主配置的玩家
+        configured.forEach((p: any) => store.addPlayer(p.name))
+        const fresh = store.players
+        configured.forEach((p: any, i: number) => {
+          if (fresh[i]) {
+            if (p.identity) fresh[i].identity = p.identity
+            if (p.heroId) fresh[i].heroId = p.heroId
+          }
+        })
+      } else {
+        // 默认名单（调试/未配置）
+        const names = botNames && botNames.length > 0 ? botNames
+          : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
+        names.forEach(n => store.addPlayer(n))
+      }
       store.assignIdentities()
       store.loadDefaultMap()
       store.assignHeroes()

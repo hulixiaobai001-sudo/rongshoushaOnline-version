@@ -18,24 +18,34 @@ const DEBUG_PHRASE = '柯基不爱喝茶'
 
 
 // ═══════════════════════════════════════════════════
-//  角色分配面板（管理员）
+//  玩家管理面板（房主：加人/删人/身份/角色）
 // ═══════════════════════════════════════════════════
 function RoleAssignmentPanel() {
   const store = useGameStore()
   const [expanded, setExpanded] = useState(false)
+  const [newName, setNewName] = useState('')
   const players = store.players
   const [editIdentity, setEditIdentity] = useState<Record<string, 'killer' | 'civilian'>>({})
   const [editHero, setEditHero] = useState<Record<string, string>>({})
 
-  if (players.length === 0) return null
+  const addPlayer = () => {
+    const name = (newName || '').trim() || `玩家${players.length + 1}`
+    if (players.length >= 12) { alert('最多12名玩家'); return }
+    store.addPlayer(name)
+    setNewName('')
+  }
+
+  const removePlayer = (id: string) => {
+    store.removePlayer(id)
+  }
 
   const toggleIdentity = (playerId: string) => {
-    const current = editIdentity[playerId] || players.find((p: any) => p.id === playerId)?.identity || 'civilian'
+    const player = players.find((p: any) => p.id === playerId)
+    if (!player) return
+    const current = editIdentity[playerId] || player.identity || 'civilian'
     const newId = current === 'killer' ? 'civilian' : 'killer'
     setEditIdentity({ ...editIdentity, [playerId]: newId })
-    // 直接修改store中的玩家身份
-    const player = players.find((p: any) => p.id === playerId)
-    if (player) player.identity = newId
+    player.identity = newId
   }
 
   const setPlayerHero = (playerId: string, heroId: string) => {
@@ -51,43 +61,75 @@ function RoleAssignmentPanel() {
       <CardContent className="p-3">
         <button onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-between text-xs font-bold text-indigo-400">
-          <span>🎭 角色分配（杀手 {totalKillers}人 / 平民 {players.length - totalKillers}人）</span>
+          <span>🎭 玩家配置（{players.length}/12 人 · 🔴杀手 {totalKillers} · 🔵平民 {players.length - totalKillers}）</span>
           <span>{expanded ? '收起' : '展开'}</span>
         </button>
         {expanded && (
-          <div className="mt-2 space-y-1.5 max-h-[200px] overflow-auto">
-            {players.map((p: any) => {
-              const curIdentity = editIdentity[p.id] || p.identity
-              const curHero = editHero[p.id] || p.heroId
-              return (
-                <div key={p.id} className="flex items-center gap-1.5 bg-slate-900/50 rounded px-2 py-1.5">
-                  <span className="text-xs text-slate-300 w-16 truncate shrink-0">{p.name}</span>
-                  <button onClick={() => toggleIdentity(p.id)}
-                    className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                      curIdentity === 'killer' ? 'bg-red-900/60 text-red-300' : 'bg-blue-900/60 text-blue-300'
-                    }`}>
-                    {curIdentity === 'killer' ? '🔴杀手' : '🔵平民'}
-                  </button>
-                  <select value={curHero} onChange={(e) => setPlayerHero(p.id, e.target.value)}
-                    className="flex-1 text-[9px] bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-slate-300 min-w-0">
-                    <option value="">随机英雄</option>
-                    <option value="xiling">西凌</option>
-                    <option value="kexiong">科雄</option>
-                    <option value="niangao">年糕</option>
-                    <option value="lilongxiang">李龙祥</option>
-                    <option value="zhuxun">竹隼</option>
-                    <option value="zhangyang">张扬</option>
-                    <option value="fengming">冯明</option>
-                    <option value="wangli">王力</option>
-                    <option value="yeyu">夜羽</option>
-                    <option value="baiye">白野</option>
-                    <option value="tianyi">天燚</option>
-                    <option value="jiangfeng">江枫</option>
-                  </select>
-                </div>
-              )
-            })}
-            <p className="text-[9px] text-slate-500 text-center pt-1">点击身份切换 🔴杀手/🔵平民，下拉选择英雄</p>
+          <div className="mt-2 space-y-2">
+            {/* 添加玩家 */}
+            <div className="flex gap-1.5">
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={8}
+                placeholder="输入玩家名字（可留空自动编号）"
+                onKeyDown={(e) => { if (e.key === 'Enter') addPlayer() }}
+                className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none" />
+              <Button size="sm" onClick={addPlayer} disabled={players.length >= 12}
+                className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs shrink-0">
+                添加
+              </Button>
+            </div>
+
+            {/* 玩家列表 */}
+            <div className="space-y-1.5 max-h-[260px] overflow-auto">
+              {players.length === 0 && (
+                <p className="text-[10px] text-slate-500 text-center py-2">还没有玩家，点击上方「添加」创建（至少4人开局）</p>
+              )}
+              {players.map((p: any) => {
+                const curIdentity = editIdentity[p.id] || p.identity || 'civilian'
+                const curHero = editHero[p.id] || p.heroId
+                return (
+                  <div key={p.id} className="flex items-center gap-1.5 bg-slate-900/50 rounded px-2 py-1.5">
+                    <span className="text-xs text-slate-300 w-14 truncate shrink-0">{p.name}</span>
+                    <button onClick={() => toggleIdentity(p.id)}
+                      className={`text-[10px] px-2 py-0.5 rounded font-medium shrink-0 ${
+                        curIdentity === 'killer' ? 'bg-red-900/60 text-red-300' : 'bg-blue-900/60 text-blue-300'
+                      }`}>
+                      {curIdentity === 'killer' ? '🔴杀手' : '🔵平民'}
+                    </button>
+                    <select value={curHero} onChange={(e) => setPlayerHero(p.id, e.target.value)}
+                      className="flex-1 text-[9px] bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-slate-300 min-w-0">
+                      <option value="">随机英雄</option>
+                      <option value="xiling">西凌</option>
+                      <option value="kexiong">科雄</option>
+                      <option value="niangao">年糕</option>
+                      <option value="lilongxiang">李龙祥</option>
+                      <option value="zhuxun">竹隼</option>
+                      <option value="zhangyang">张扬</option>
+                      <option value="fengming">冯明</option>
+                      <option value="wangli">王力</option>
+                      <option value="yeyu">夜羽</option>
+                      <option value="baiye">白野</option>
+                      <option value="tianyi">天燚</option>
+                      <option value="jiangfeng">江枫</option>
+                    </select>
+                    <button onClick={() => removePlayer(p.id)}
+                      className="text-slate-500 hover:text-red-400 text-xs shrink-0 w-4">✕</button>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 快速填充 */}
+            {players.length < 4 && (
+              <Button variant="outline" size="sm" onClick={() => {
+                while (players.length < 4) {
+                  store.addPlayer(`玩家${players.length + 1}`)
+                }
+              }} className="w-full h-7 text-[10px] border-indigo-700 text-indigo-400 hover:bg-indigo-950">
+                ⚡ 快速补满4人
+              </Button>
+            )}
+
+            <p className="text-[9px] text-slate-500 text-center">点击身份切换 🔴杀手/🔵平民 · 下拉选英雄 · 开局后生效</p>
           </div>
         )}
       </CardContent>

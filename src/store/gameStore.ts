@@ -388,70 +388,68 @@ export const useGameStore = create<GameStore>()(
 
     assignIdentities: () =>
       set((state) => {
-        // 检查是否有玩家已通过管理员面板手动分配身份
-        // addPlayer会给默认identity，用manualAssignment标记区分
-        const hasManual = (state as any)._manualIdentitySet === true;
-        if (hasManual) { state.phase = 'identity'; return; }
         const totalPlayers = state.players.length;
         if (totalPlayers === 0) return;
-        // 优先使用房主设置的 killerCount，否则动态计算（最多半数）
-        const useKillers = state.killerCount > 0 ? state.killerCount : Math.max(1, Math.floor(totalPlayers / 2));
-        const dynamicKillers = Math.min(useKillers, Math.floor(totalPlayers / 2));
-        const dynamicCivilians = totalPlayers - dynamicKillers;
+        // 目标杀手数：优先房主设置，否则动态（约半数）
+        const targetKillers = state.killerCount > 0
+          ? Math.min(state.killerCount, Math.floor(totalPlayers / 2))
+          : Math.max(1, Math.floor(totalPlayers / 2));
+
+        // 未分配身份的玩家（identity 为空）
+        const unassigned = state.players.filter(p => p.identity !== 'killer' && p.identity !== 'civilian');
+
+        if (unassigned.length === 0) {
+          // 全部已手动分配
+          state.phase = 'identity';
+          return;
+        }
+
+        if (unassigned.length < totalPlayers) {
+          // 部分手动分配：给未分配的补身份，保持总杀手数
+          const killersNow = state.players.filter(p => p.identity === 'killer').length;
+          let needKillers = Math.max(0, targetKillers - killersNow);
+          const shuffled = [...unassigned].sort(() => Math.random() - 0.5);
+          shuffled.forEach((p, i) => {
+            if (i < needKillers) p.identity = 'killer';
+            else p.identity = 'civilian';
+          });
+          state.phase = 'identity';
+          return;
+        }
+
+        // 全部未分配：完全随机
+        const dynamicKillers = Math.min(targetKillers, Math.floor(totalPlayers / 2));
         const identities: Identity[] = [];
         for (let i = 0; i < dynamicKillers; i++) identities.push('killer');
-        for (let i = 0; i < dynamicCivilians; i++) identities.push('civilian');
-        if (identities.length < totalPlayers) {
-          while (identities.length < totalPlayers) identities.push('civilian');
-        } else if (identities.length > totalPlayers) {
-          while (identities.length > totalPlayers) {
-            const lastCivIndex = identities.lastIndexOf('civilian');
-            if (lastCivIndex !== -1) identities.splice(lastCivIndex, 1);
-            else identities.pop();
-          }
-        }
+        for (let i = 0; i < totalPlayers - dynamicKillers; i++) identities.push('civilian');
         for (let i = identities.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [identities[i], identities[j]] = [identities[j], identities[i]];
         }
         state.players.forEach((p, i) => { p.identity = identities[i]; });
         state.phase = 'identity';
-        state.events.push({
-          id: generateId('evt'), round: 1, phase: 'identity',
-          timestamp: Date.now(), type: 'info',
-          description: `身份已分配：${state.killerCount}个杀手，${state.civilianCount}个平民`,
-        });
       }),
 
     assignHeroes: () =>
       set((state) => {
         if (!state.heroPoolEnabled) return;
-        // 如果有玩家已分配英雄（管理员模式），跳过
-        const hasManual = state.players.some(p => p.heroId && p.heroId !== '');
-        if (hasManual) return;
-        // 使用英雄池1.1
+        // 使用英雄池1.1（不重复分配）
         const pool = [...HERO_POOL_V1_1_IDS];
+        // 去掉已手动分配的英雄
+        const usedHeroes = new Set(state.players.map(p => p.heroId).filter(h => h && h !== ''));
+        const available = pool.filter(h => !usedHeroes.has(h));
         // Fisher-Yates 随机打乱
-        for (let i = pool.length - 1; i > 0; i--) {
+        for (let i = available.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [pool[i], pool[j]] = [pool[j], pool[i]];
+          [available[i], available[j]] = [available[j], available[i]];
         }
-        // 不重复分配：每个玩家分配一个唯一英雄，英雄用尽则后续玩家不分配
-        const assignedHeroNames: string[] = [];
-        state.players.forEach((p, i) => {
-          if (i < pool.length) {
-            p.heroId = pool[i];
-            const h = HERO_POOL.find((hero) => hero.id === pool[i]);
-            if (h) assignedHeroNames.push(h.name);
-          } else {
-            p.heroId = ''; // 英雄用尽，不分配
+        // 给未分配英雄的玩家随机分配（不重复）
+        let idx = 0;
+        state.players.forEach((p) => {
+          if (!p.heroId && idx < available.length) {
+            p.heroId = available[idx];
+            idx++;
           }
-        });
-        const unassignedCount = state.players.length - assignedHeroNames.length;
-        state.events.push({
-          id: generateId('evt'), round: 1, phase: 'identity',
-          timestamp: Date.now(), type: 'info',
-          description: `【英雄池1.2】英雄已分配：${assignedHeroNames.join(', ')}${unassignedCount > 0 ? `（${unassignedCount}名玩家未分配到英雄）` : ''}`,
         });
       }),
 
