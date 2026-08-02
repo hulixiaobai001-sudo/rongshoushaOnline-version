@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { GameState, GamePhase, Location, Identity, Winner, GameEvent } from '@/types/game';
 import { generateId, generateRandomMap as genRandomMap, getLocationEffectByName, HERO_POOL_V1_1_IDS } from '@/data/gameData';
-import { HERO_POOL } from '@/data/heroData';
 
 const initialState: GameState = {
   phase: 'setup',
