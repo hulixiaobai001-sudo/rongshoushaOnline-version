@@ -1,24 +1,63 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LobbyHall } from '@/network/LobbyHall';
 import { Lobby } from '@/network/Lobby';
+import { Admin } from '@/admin/Admin';
 import { Button } from '@/components/ui/button';
 import { Wifi } from 'lucide-react';
 
-type AppMode = 'menu' | 'online_hall' | 'online_host' | 'online_player';
+type AppMode = 'menu' | 'online_hall' | 'online_host' | 'online_player' | 'admin';
 
 function App() {
   const [appMode, setAppMode] = useState<AppMode>('menu');
   const [quickJoinCode, setQuickJoinCode] = useState<string>('');
+  const [announcement, setAnnouncement] = useState('');
+  const logoClickCount = useRef(0);
+  const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 拉取公告
+  useEffect(() => {
+    const fetchAnnouncement = async () => {
+      try {
+        const res = await fetch(window.location.origin + '/api/announcement');
+        const data = await res.json();
+        if (data.ok && data.announcement) setAnnouncement(data.announcement);
+      } catch {
+        // 服务器不可用则忽略
+      }
+    };
+    fetchAnnouncement();
+  }, []);
+
+  // 隐藏入口：连点🦊logo 5次打开后台
+  const handleLogoClick = () => {
+    logoClickCount.current++
+    if (logoClickTimer.current) clearTimeout(logoClickTimer.current)
+    logoClickTimer.current = setTimeout(() => { logoClickCount.current = 0 }, 2000)
+    if (logoClickCount.current >= 5) {
+      logoClickCount.current = 0
+      setAppMode('admin')
+    }
+  }
+
+  if (appMode === 'admin') {
+    return <Admin onBack={() => setAppMode('menu')} />;
+  }
 
   if (appMode === 'menu') {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center mb-8">
-            <div className="text-5xl mb-3">🦊</div>
+            <div className="text-5xl mb-3 cursor-pointer select-none" onClick={handleLogoClick}>🦊</div>
             <h1 className="text-3xl font-bold text-white">绒兽杀</h1>
             <p className="text-sm text-slate-400 mt-2">联机对战</p>
           </div>
+
+          {announcement && (
+            <div className="bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2.5 text-[11px] text-amber-300/90">
+              📢 {announcement}
+            </div>
+          )}
 
           <Button
             onClick={() => setAppMode('online_hall')}

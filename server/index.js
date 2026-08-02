@@ -13,6 +13,31 @@ const PUBLIC_DIR = join(import.meta.dirname, '..', 'dist');
 // 房间数据存储（内存）
 // ============================================
 const rooms = new Map(); // roomId -> { hostId, hostName, playerCount, maxPlayers, isPublic, hasPassword, createdAt, updatedAt }
+const roomHistory = [];   // 对局历史（创建/结束记录）
+const adminTokens = new Map(); // token -> expiry
+const ADMIN_PASSWORD = '柯基不爱喝茶';
+let announcement = '';    // 前台公告
+
+function verifyAdmin(req) {
+  const auth = req.headers['authorization'] || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const expiry = adminTokens.get(token);
+  if (!expiry || Date.now() > expiry) return false;
+  return true;
+}
+
+function recordHistory(room) {
+  roomHistory.push({
+    roomId: room.roomId,
+    hostName: room.hostName,
+    playerCount: room.playerCount,
+    maxPlayers: room.maxPlayers,
+    isPublic: room.isPublic,
+    startedAt: room.createdAt,
+    endedAt: Date.now(),
+  });
+  if (roomHistory.length > 200) roomHistory.shift();
+}
 
 function generateId(len = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -71,6 +96,91 @@ const httpServer = createServer((req, res) => {
       return;
     }
 
+    // ===== 管理后台 API =====
+    // 后台登录
+    if (url.pathname === '/api/admin/login' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data.password === ADMIN_PASSWORD) {
+            const token = generateId(24);
+            adminTokens.set(token, Date.now() + 1000 * 60 * 60 * 8); // 8小时
+            sendJson(res, 200, { ok: true, token });
+          } else {
+            sendJson(res, 401, { ok: false, error: '密码错误' });
+          }
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: '格式错误' });
+        }
+      });
+      return;
+    }
+
+    // 后台：所有房间（含私密）
+    if (url.pathname === '/api/admin/rooms' && req.method === 'GET') {
+      if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
+      const list = [...rooms.values()].sort((a, b) => b.createdAt - a.createdAt).map(r => ({
+        roomId: r.roomId,
+        hostName: r.hostName,
+        playerCount: r.playerCount,
+        maxPlayers: r.maxPlayers,
+        isPublic: r.isPublic,
+        hasPassword: !!r.hasPassword,
+        createdAt: r.createdAt,
+        lastHeartbeat: r.updatedAt,
+      }));
+      sendJson(res, 200, { ok: true, rooms: list });
+      return;
+    }
+
+    // 后台：对局历史
+    if (url.pathname === '/api/admin/history' && req.method === 'GET') {
+      if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
+      const list = roomHistory.slice(-100).reverse();
+      sendJson(res, 200, { ok: true, history: list });
+      return;
+    }
+
+    // 后台：统计
+    if (url.pathname === '/api/admin/stats' && req.method === 'GET') {
+      if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
+      const now = Date.now();
+      const totalPlayers = [...rooms.values()].reduce((s, r) => s + r.playerCount, 0);
+      sendJson(res, 200, { ok: true, stats: {
+        activeRooms: rooms.size,
+        totalPlayers,
+        totalGames: roomHistory.length,
+        last24hGames: roomHistory.filter(h => now - h.startedAt < 86400000).length,
+        announcement,
+      }});
+      return;
+    }
+
+    // 公告：读取（公开）
+    if (url.pathname === '/api/announcement' && req.method === 'GET') {
+      sendJson(res, 200, { ok: true, announcement });
+      return;
+    }
+
+    // 公告：设置（后台）
+    if (url.pathname === '/api/admin/announcement' && req.method === 'POST') {
+      if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          announcement = String(data.text || '').slice(0, 200);
+          sendJson(res, 200, { ok: true, announcement });
+        } catch (e) {
+          sendJson(res, 400, { ok: false, error: '格式错误' });
+        }
+      });
+      return;
+    }
+
     // 获取公开房间列表
     if (url.pathname === '/api/rooms' && req.method === 'GET') {
       const list = [...rooms.values()]
@@ -124,6 +234,8 @@ const httpServer = createServer((req, res) => {
       const room = rooms.get(roomId);
 
       if (req.method === 'DELETE') {
+        const rm = rooms.get(roomId);
+        if (rm) recordHistory(rm);
         rooms.delete(roomId);
         sendJson(res, 200, { ok: true });
         return;
