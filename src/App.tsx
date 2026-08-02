@@ -17,7 +17,7 @@ function App() {
           <div className="text-center mb-8">
             <div className="text-5xl mb-3">🦊</div>
             <h1 className="text-3xl font-bold text-white">绒兽杀</h1>
-            <p className="text-sm text-slate-400 mt-2">在线版 · P2P 直连</p>
+            <p className="text-sm text-slate-400 mt-2">联机对战</p>
           </div>
 
           <Button
@@ -29,7 +29,7 @@ function App() {
           </Button>
 
           <div className="text-center text-[10px] text-slate-600 mt-4">
-            P2P 直连 · 建议每房间不超过10人 · 通过房间码加入
+            建议每房间不超过10人 · 通过房间码加入
           </div>
         </div>
       </div>
