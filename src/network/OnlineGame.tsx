@@ -710,7 +710,9 @@ ${skill.description}`)
                 const locPlayers = players.filter(p => p.locationId === loc.id && p.status === 'alive')
                 const isCurrentLoc = locPlayers.some(p => p.id === currentPlayer?.id)
                 const isSelected = selectedLocationId === loc.id && !isCurrentLoc
-                const isReachable = isMoveMode && reachableLocations.some(r => r.id === loc.id)
+                // 传送激活时所有地点可达
+                const isTeleportReady = isMoveMode && currentPlayer?.teleportReady
+                const isReachable = isMoveMode && (isTeleportReady ? true : reachableLocations.some(r => r.id === loc.id))
                 const isClickable = isMoveMode ? isReachable : true
 
                 return (
@@ -823,7 +825,7 @@ ${skill.description}`)
               {isMoveMode && (
                 <text x={50} y={5} textAnchor="middle" fontSize="3.5" fill="#818cf8" fontWeight="600"
                   style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                  选择高亮地点进行移动
+                  {currentPlayer?.teleportReady ? '✨ 传送模式：点击任意地点' : '选择高亮地点进行移动'}
                 </text>
               )}
               {isTargetingMode && selectedSkill && (
