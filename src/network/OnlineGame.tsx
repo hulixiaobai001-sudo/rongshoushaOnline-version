@@ -1436,6 +1436,7 @@ function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayer
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
 function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
+  isHost: boolean;
   currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
   store: any; onNextPhase: () => void;
