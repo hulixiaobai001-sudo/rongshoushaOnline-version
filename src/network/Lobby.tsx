@@ -181,18 +181,26 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const connectingRef = useRef(false)
   const roomHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 防刷新：恢复玩家名，显示重连提示；支持从大厅快速加入
+  // 防刷新：自动重连 + 支持从大厅快速加入
   useEffect(() => {
-    const savedName = localStorage.getItem('rs_player_name')
+    const savedName = (() => { try { return localStorage.getItem('rs_player_name') || '' } catch { return '' } })()
     if (savedName) setMyName(savedName)
+    // 从大厅快速加入
     if (quickJoinCode) {
       setInputCode(quickJoinCode)
       setStatus('正在加入房间 ' + quickJoinCode + ' ...')
-      // 延迟一下让组件先渲染
       const t = setTimeout(() => { handleJoinRoom() }, 300)
       return () => clearTimeout(t)
     }
-    const savedRoom = localStorage.getItem('rs_room_code')
+    // 刷新后自动重连（玩家角色）
+    const savedRoom = (() => { try { return localStorage.getItem('rs_room_code') || '' } catch { return '' } })()
+    const savedRole = (() => { try { return localStorage.getItem('rs_room_role') || '' } catch { return '' } })()
+    if (savedRoom && savedRole === 'player' && savedName) {
+      setInputCode(savedRoom)
+      setStatus('正在自动重连房间 ' + savedRoom + ' ...')
+      const t = setTimeout(() => { handleJoinRoom() }, 500)
+      return () => clearTimeout(t)
+    }
     if (savedRoom) {
       setInputCode(savedRoom)
       setStatus('检测到上次的房间(' + savedRoom + ')，点击「加入」可快速重连')

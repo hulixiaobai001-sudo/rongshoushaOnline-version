@@ -63,6 +63,10 @@ function App() {
           setQuickJoinCode(roomId);
           setAppMode('online_player');
         }}
+        onJoinByCode={(roomId) => {
+          setQuickJoinCode(roomId);
+          setAppMode('online_player');
+        }}
       />
     );
   }

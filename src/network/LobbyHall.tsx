@@ -9,13 +9,16 @@ interface LobbyHallProps {
   onCreateRoom: () => void
   onBack: () => void
   onJoinRoom: (roomId: string) => void
+  onJoinByCode: (roomId: string) => void
 }
 
-export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) {
+export function LobbyHall({ onCreateRoom, onBack, onJoinRoom, onJoinByCode }: LobbyHallProps) {
   const [rooms, setRooms] = useState<PublicRoom[]>([])
   const [loading, setLoading] = useState(false)
   const [serverOk, setServerOk] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<PublicRoom | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [roomCodeInput, setRoomCodeInput] = useState('')
   const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
@@ -68,8 +71,17 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
       <div className="px-3 md:px-4 py-3">
         <div className="relative max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <Input placeholder="搜索房间..." disabled
-            className="pl-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 opacity-50" />
+          <Input placeholder="搜索房主或房间码..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500" />
+        </div>
+
+        {/* 输入房间码加入 */}
+        <div className="flex gap-2 mt-2 max-w-md">
+          <Input placeholder="输入房间码加入" value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && roomCodeInput.trim()) onJoinByCode(roomCodeInput.trim()) }}
+            className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500" />
+          <Button onClick={() => roomCodeInput.trim() && onJoinByCode(roomCodeInput.trim())}
+            className="bg-emerald-600 hover:bg-emerald-700 h-10 shrink-0">加入</Button>
         </div>
       </div>
 
@@ -83,7 +95,10 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
             </div>
           )}
 
-          {rooms.length === 0 ? (
+          {(() => {
+            const kw = searchTerm.trim().toLowerCase()
+            const filtered = kw ? rooms.filter(r => r.hostName.toLowerCase().includes(kw) || r.roomId.toLowerCase().includes(kw)) : rooms
+            return filtered.length === 0 ? (
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="p-8 text-center">
                 <Wifi className="w-12 h-12 text-slate-600 mx-auto mb-3" />
@@ -97,7 +112,7 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
                 </Button>
               </CardContent>
             </Card>
-          ) : (
+            ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs text-slate-400">公开房间（{rooms.length}）</span>
@@ -106,7 +121,10 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
                   <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />刷新
                 </Button>
               </div>
-              {rooms.map((room) => (
+              {(() => {
+                const kw2 = searchTerm.trim().toLowerCase()
+                const filtered2 = kw2 ? rooms.filter(r => r.hostName.toLowerCase().includes(kw2) || r.roomId.toLowerCase().includes(kw2)) : rooms
+                return filtered2.map((room) => (
                 <Card key={room.roomId} className="bg-slate-800 border-slate-700 hover:border-indigo-500 transition-colors">
                   <CardContent className="p-3 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-indigo-900/40 border border-indigo-700/40 flex items-center justify-center shrink-0">
@@ -134,7 +152,8 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom }: LobbyHallProps) 
                     </Button>
                   </CardContent>
                 </Card>
-              ))}
+              ))
+              })()}
             </div>
           )}
         </div>
