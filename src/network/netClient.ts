@@ -4,12 +4,6 @@
 // 服务器做消息路由，房主跑游戏逻辑
 // ============================================
 
-interface RoomMember {
-  id: string
-  name: string
-  isHost: boolean
-}
-
 type NetHandler = (data: any) => void
 
 const handlers: Record<string, NetHandler[]> = {}
@@ -21,10 +15,6 @@ let myState = { isHost: false, roomId: '', playerId: '', playerName: '' }
 function getWsUrl(): string {
   const base = window.location.origin
   return base.replace(/^http/, 'ws') + '/'
-}
-
-function safeGet(key: string): string | null {
-  try { return localStorage.getItem(key) } catch { return null }
 }
 
 function openSocket(): Promise<void> {

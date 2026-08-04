@@ -32,8 +32,6 @@ const initialState: GameState = {
   roundSkillUsage: {},
   myPlayerId: '',
   myIdentity: 'civilian',
-  myPlayerId: '',
-  myIdentity: 'civilian',
 };
 
 // 阶段顺序（游戏循环：action→move×4→death→vote→vote_result→循环）
