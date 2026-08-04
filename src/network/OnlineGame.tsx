@@ -1334,7 +1334,17 @@ ${skill.description}`)
 
       {/* ═══ 弹窗 ═══ */}
       {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
-        players={players} currentPhase={phase} />}
+        players={players} currentPhase={phase} currentPlayerName={currentPlayer?.name || '玩家'}
+        onRename={(name: string) => {
+          if (!currentPlayer) return
+          if (isHost) {
+            store.updatePlayerName(currentPlayer.id, name)
+            hostSync()
+          } else {
+            netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
+            store.updatePlayerName(currentPlayer.id, name)
+          }
+        }} />}
     </div>
   )
 }
@@ -1814,12 +1824,14 @@ function RulesPopup({ onClose }: { onClose: () => void }) {
 //  弹窗覆盖层
 // ═══════════════════════════════════════════════════
 function PopupOverlay({
-  popup, onClose, players, currentPhase
+  popup, onClose, players, currentPhase, currentPlayerName, onRename
 }: {
   popup: PopupState
   onClose: () => void
   players: any[]
   currentPhase: string
+  currentPlayerName?: string
+  onRename?: (name: string) => void
 }) {
   if (popup.type === 'settings') {
     return (
@@ -1837,20 +1849,12 @@ function PopupOverlay({
               <div className="flex items-center justify-between">
                 <span>玩家名</span>
                 <button onClick={() => {
-                  const nn = prompt('修改玩家名（8字以内）：', currentPlayer?.name || '玩家')
-                  if (nn && nn.trim() && currentPlayer) {
-                    const name = nn.trim().slice(0, 8)
-                    if (isHost) {
-                      store.updatePlayerName(currentPlayer.id, name)
-                      hostSync()
-                    } else {
-                      netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
-                      // 本地也改（等房主广播覆盖）
-                      store.updatePlayerName(currentPlayer.id, name)
-                    }
+                  const nn = prompt('修改玩家名（8字以内）：', currentPlayerName || '玩家')
+                  if (nn && nn.trim()) {
+                    onRename?.(nn.trim().slice(0, 8))
                   }
                 }}
-                  className="text-slate-400 hover:text-white text-xs underline">{currentPlayer?.name || '玩家'}</button>
+                  className="text-slate-400 hover:text-white text-xs underline">{currentPlayerName || '玩家'}</button>
               </div>
               <div className="flex items-center justify-between">
                 <span>音效</span>
