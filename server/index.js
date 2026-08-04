@@ -401,18 +401,19 @@ wss.on('connection', (ws) => {
         }
         const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
         const name = String(msg.playerName || '玩家').slice(0, 20);
+        const isSpectator = !!msg.isSpectator;
         ws.playerId = playerId;
         ws.roomId = roomId;
         ws.isHost = false;
         ws.playerName = name;
-        room.players.set(playerId, { ws, name });
+        room.players.set(playerId, { ws, name, isSpectator });
         // 通知房主
-        wsSend(room.hostWs, { type: 'player_joined', playerId, name });
+        wsSend(room.hostWs, { type: 'player_joined', playerId, name, isSpectator });
         // 通知玩家自己
-        wsSend(ws, { type: 'room_joined', roomId, playerId, isHost: false, players: memberList(room) });
+        wsSend(ws, { type: 'room_joined', roomId, playerId, isHost: false, isSpectator, players: memberList(room) });
         // 通知其他玩家
         room.players.forEach((p, pid) => {
-          if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name });
+          if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name, isSpectator });
         });
         syncRoomListToRoom(room);
         break;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations } from '@/data/gameData'
@@ -59,12 +59,13 @@ const MOVE_SKILL_IDS = ['zhuxun_double_move', 'fengming_teleport']
 // ═══════════════════════════════════════════════════
 interface OnlineGameProps {
   isHost: boolean
+  isSpectator?: boolean
   debugMode: boolean
   botNames?: string[]
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, botNames, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
@@ -87,14 +88,17 @@ export function OnlineGame({ isHost, botNames, onLeave }: OnlineGameProps) {
   const [toast, setToast] = useState<string | null>(null)
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
+  const voteCollector = useRef<Array<{ voterId: string; targetId: string }>>([])
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setHasAttacked(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
-  const currentPlayer = isHost
-    ? (players && players.length > 0 ? players[0] : null)
-    : (store.myPlayerId ? players.find(p => p.id === store.myPlayerId) || null : null)
+  const currentPlayer = isSpectator
+    ? null
+    : isHost
+      ? (players && players.length > 0 ? players[0] : null)
+      : (store.myPlayerId ? players.find(p => p.id === store.myPlayerId) || null : null)
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
 
   // ── 阶段信息 ──
@@ -235,7 +239,7 @@ export function OnlineGame({ isHost, botNames, onLeave }: OnlineGameProps) {
           store.applyRemoteState(msg.state)
         } else if (msg.type === 'sync') {
           store.applyRemoteState(msg.state)
-        } else if (msg.type === 'your_role') {
+        } else if (msg.type === 'your_role' && !isSpectator) {
           store.setMyInfo(msg.playerId, msg.identity)
           if (msg.heroId && msg.heroId !== '') {
             const p = store.players.find((x: any) => x.id === msg.playerId)
@@ -661,6 +665,20 @@ ${skill.description}`)
           })
           break
         }
+        case 'vote': {
+          // 房主收集投票（玩家上报后，房主点确认统一提交）
+          if (payload?.targetId) {
+            voteCollector.current.push({ voterId: playerId, targetId: payload.targetId })
+          }
+          break
+        }
+        case 'gunshot': {
+          if (payload?.targetId) {
+            store.executeGunShot(playerId, payload.targetId)
+            hostSync()
+          }
+          break
+        }
         case 'skill': {
           // 技能：找到技能定义执行
           const sk = payload?.skillId
@@ -814,6 +832,7 @@ ${skill.description}`)
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
+            isHost={isHost}
             currentPlayer={currentPlayer} hero={hero}
             alivePlayers={alivePlayers}
             usedSkills={usedSkills}
@@ -942,8 +961,8 @@ ${skill.description}`)
                         {loc.effect.name}
                       </text>
                     )}
-                    {/* 玩家图标 - 仅当前地点显示 */}
-                    {isCurrentLoc && locPlayers.map((p, i) => {
+                    {/* 玩家图标 - 仅当前地点显示（观战者看全图） */}
+                    {(isCurrentLoc || isSpectator) && locPlayers.map((p, i) => {
                       const angle = (2 * Math.PI * i) / Math.max(locPlayers.length, 1) - Math.PI / 2
                       const px = loc.x + Math.cos(angle) * 7
                       const py = loc.y + Math.sin(angle) * 7
@@ -1152,10 +1171,21 @@ ${skill.description}`)
       </main>
 
       {/* ═══ 底部操作栏 ═══ */}
+      {/* 观战提示 + 事件日志 */}
+      {isSpectator && (
+        <div className="shrink-0 border-t border-slate-700 bg-slate-800/70 px-3 py-2">
+          <p className="text-[10px] text-purple-400 font-medium mb-1">👁️ 观战模式 - 全图视角</p>
+          <div className="max-h-[80px] overflow-auto space-y-0.5">
+            {store.events.slice(-10).map((e: any, i: number) => (
+              <p key={i} className="text-[9px] text-slate-500">{e.description}</p>
+            ))}
+          </div>
+        </div>
+      )}
       <footer className="shrink-0 border-t border-slate-700 bg-slate-800/90">
         <div className="flex items-center gap-2 px-3 py-2">
           {/* 左：身份查看按钮 */}
-          {currentPlayer && !isGameOver && (
+          {currentPlayer && !isGameOver && !isSpectator && (
             <button onClick={() => info('你的身份', currentPlayer.identity === 'killer' ? '🔴 杀手' : '🔵 平民')}
               className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-slate-700/60 text-slate-300 hover:bg-slate-600 border border-slate-600 transition-colors shrink-0">
               👤 身份
@@ -1163,7 +1193,7 @@ ${skill.description}`)
           )}
           {/* 左：技能区 */}
           <div className="flex-1 min-w-0">
-            {availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
+            {!isSpectator && availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
               <div className="flex flex-wrap items-center gap-1">
                 <button onClick={() => setSkillsOpen(!skillsOpen)}
                   className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 px-1.5 py-1 rounded hover:bg-slate-700/50 transition-colors">
@@ -1193,7 +1223,7 @@ ${skill.description}`)
           </div>
 
           {/* 中：攻击按钮（杀手专用） */}
-          {currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
+          {!isSpectator && currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={() => {
               if (hasAttacked) { info('已攻击过', '本阶段你已经攻击过了'); return }
               if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
@@ -1207,7 +1237,7 @@ ${skill.description}`)
           )}
 
           {/* 中：移动按钮 */}
-          {isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
+          {!isSpectator && isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={handleMoveClick}
               disabled={hasMoved && !currentPlayer?.doubleMoveActive}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
@@ -1226,7 +1256,7 @@ ${skill.description}`)
           )}
 
           {/* 右：准备/就绪按钮 */}
-          {!isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
+          {!isSpectator && !isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
             <button onClick={handleReady}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
                 myReady ? 'bg-emerald-700 text-emerald-200' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
@@ -1363,22 +1393,32 @@ function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayer
 // ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
-function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
+function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
   currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
   store: any; onNextPhase: () => void;
 }) {
   const [voteTarget, setVoteTarget] = useState<string | null>(null)
   const [gunshotTarget, setGunshotTarget] = useState<string | null>(null)
+  const [voteSubmitted, setVoteSubmitted] = useState(false)
 
   const isLiLongxiang = hero?.id === 'lilongxiang'
   const gunShotUsed = isLiLongxiang && (usedSkills[currentPlayer?.id || ''] || []).includes('lilongxiang_gunshot')
 
   const handleConfirmVote = () => {
-    if (voteTarget) {
-      store.submitVotes([{ voterId: currentPlayer.id, targetId: voteTarget }])
+    if (isHost) {
+      if (voteTarget) {
+        store.submitVotes([{ voterId: currentPlayer.id, targetId: voteTarget }])
+      }
+      onNextPhase()
+    } else {
+      // 玩家端：上报投票和就绪，等房主统一提交
+      if (voteTarget) {
+        netToHost({ type: 'action', action: 'vote', data: { playerId: currentPlayer?.id, targetId: voteTarget } })
+      }
+      netToHost({ type: 'action', action: 'ready', data: { playerId: currentPlayer?.id } })
+      setVoteSubmitted(true)
     }
-    onNextPhase()
   }
 
   return (
@@ -1436,7 +1476,14 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
             })}
           </div>
           {gunshotTarget && (
-            <button onClick={() => { store.executeGunShot(currentPlayer.id, gunshotTarget); setGunshotTarget(null) }}
+            <button onClick={() => {
+              if (isHost) {
+                store.executeGunShot(currentPlayer.id, gunshotTarget)
+              } else {
+                netToHost({ type: 'action', action: 'gunshot', data: { playerId: currentPlayer?.id, targetId: gunshotTarget } })
+              }
+              setGunshotTarget(null)
+            }}
               className="mt-2 w-full py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-bold text-white transition-colors">
               🔫 执行枪决
             </button>
@@ -1446,10 +1493,10 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills, store, onN
 
       {/* 确认投票 */}
       <div className="flex gap-2 mt-auto pt-2">
-        <button onClick={handleConfirmVote}
+        <button onClick={handleConfirmVote} disabled={voteSubmitted}
           className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-colors
                      disabled:opacity-50 disabled:cursor-not-allowed">
-          {voteTarget ? `确认投票（${alivePlayers.find((p: any) => p.id === voteTarget)?.name}）` : '确认投票'}
+          {voteSubmitted ? '✅ 已投票，等待其他玩家' : (voteTarget ? `确认投票（${alivePlayers.find((p: any) => p.id === voteTarget)?.name}）` : '确认投票')}
         </button>
       </div>
     </div>

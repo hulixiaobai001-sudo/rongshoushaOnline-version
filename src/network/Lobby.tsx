@@ -320,7 +320,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setLoading(true)
     setStatus('正在加入房间...')
     try {
-      const room = await netJoinRoom(inputCode.trim(), name)
+      const room = await netJoinRoom(inputCode.trim(), name, isSpectator)
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', inputCode.trim())
       localStorage.setItem('rs_room_role', 'player')
@@ -398,6 +398,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     return (
       <OnlineGame
         isHost={mode === 'host'}
+        isSpectator={isSpectator}
         debugMode={debugMode}
         botNames={botPlayerNames}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}

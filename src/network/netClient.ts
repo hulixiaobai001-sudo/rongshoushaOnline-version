@@ -10,7 +10,7 @@ const handlers: Record<string, NetHandler[]> = {}
 
 let ws: WebSocket | null = null
 let connected = false
-let myState = { isHost: false, roomId: '', playerId: '', playerName: '' }
+let myState = { isHost: false, roomId: '', playerId: '', playerName: '', isSpectator: false }
 
 function getWsUrl(): string {
   const base = window.location.origin
@@ -45,11 +45,11 @@ function openSocket(): Promise<void> {
 function handleMessage(msg: any) {
   switch (msg.type) {
     case 'room_created':
-      myState = { isHost: true, roomId: msg.roomId, playerId: msg.playerId, playerName: '' }
+      myState = { isHost: true, roomId: msg.roomId, playerId: msg.playerId, playerName: '', isSpectator: false }
       fire('onCreated', msg)
       break
     case 'room_joined':
-      myState = { isHost: false, roomId: msg.roomId, playerId: msg.playerId, playerName: '' }
+      myState = { isHost: false, roomId: msg.roomId, playerId: msg.playerId, playerName: '', isSpectator: !!msg.isSpectator }
       fire('onJoined', msg)
       break
     case 'player_joined':
@@ -127,7 +127,7 @@ export async function netCreateRoom(roomId: string, hostName: string, opts: { is
 }
 
 /** 加入房间（玩家） */
-export async function netJoinRoom(roomId: string, playerName: string): Promise<any> {
+export async function netJoinRoom(roomId: string, playerName: string, isSpectator = false): Promise<any> {
   await openSocket()
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('加入房间超时')), 8000)
@@ -148,7 +148,7 @@ export async function netJoinRoom(roomId: string, playerName: string): Promise<a
       handlers['onJoined'] = (handlers['onJoined'] || []).filter(f => f !== joinedFn)
       handlers['onError'] = (handlers['onError'] || []).filter(f => f !== errFn2)
     }, 15000)
-    send({ type: 'room_join', roomId, playerName })
+    send({ type: 'room_join', roomId, playerName, isSpectator })
   })
 }
 
@@ -190,7 +190,7 @@ export function netDisconnect() {
   if (ws) { try { ws.close() } catch { /* ignore */ } }
   ws = null
   connected = false
-  myState = { isHost: false, roomId: '', playerId: '', playerName: '' }
+  myState = { isHost: false, roomId: '', playerId: '', playerName: '', isSpectator: false }
   // 清空所有回调
   Object.keys(handlers).forEach(k => { handlers[k] = [] })
 }
