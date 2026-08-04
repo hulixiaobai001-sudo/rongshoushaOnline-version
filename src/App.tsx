@@ -13,7 +13,7 @@ function App() {
   const logoClickCount = useRef(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 隐藏入口：连点🦊logo 5次打开后台
+  // 隐藏入口：连点logo 5次打开后台
   const handleLogoClick = () => {
     logoClickCount.current++
     if (logoClickTimer.current) clearTimeout(logoClickTimer.current)
@@ -33,7 +33,7 @@ function App() {
       <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center mb-8">
-            <div className="text-5xl mb-3 cursor-pointer select-none" onClick={handleLogoClick}>🦊</div>
+            <div className="text-5xl mb-3 cursor-pointer select-none" onClick={handleLogoClick}>🎮</div>
             <h1 className="text-3xl font-bold text-white">绒兽杀</h1>
             <p className="text-sm text-slate-400 mt-2">联机对战</p>
           </div>

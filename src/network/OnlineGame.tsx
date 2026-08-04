@@ -777,7 +777,7 @@ ${skill.description}`)
     return (
       <div className="h-screen flex items-center justify-center bg-slate-900 p-4">
         <div className="text-center space-y-4">
-          <div className="text-5xl mb-3 animate-pulse">🦊</div>
+          <div className="text-5xl mb-3 animate-pulse">🎮</div>
           <h2 className="text-lg font-bold text-white">准备中</h2>
           <div className="w-48 h-1.5 bg-slate-700 rounded-full overflow-hidden mx-auto">
             <div className="h-full bg-indigo-500 rounded-full animate-pulse" style={{ width: '60%' }} />
