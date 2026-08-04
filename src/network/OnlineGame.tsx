@@ -62,10 +62,11 @@ interface OnlineGameProps {
   isSpectator?: boolean
   debugMode: boolean
   botNames?: string[]
+  joinedPlayers?: Array<{ serverId: string; name: string }>
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
@@ -158,13 +159,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
 
   // 房主：根据本地玩家ID找对应的服务器peerId（用于私发）
   const peerIdOf = (localPlayerId: string) => {
-    try {
-      const order = localStorage.getItem('rs_join_order')
-      const list = order ? JSON.parse(order) : []
-      // players[0]=房主，players[i]=第i个加入者
-      const idx = store.players.findIndex((p: any) => p.id === localPlayerId) - 1
-      return idx >= 0 && idx < list.length ? list[idx] : null
-    } catch { return null }
+    const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
+      : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
+    const idx = store.players.findIndex((p: any) => p.id === localPlayerId) - 1
+    return idx >= 0 && idx < realJoined.length ? realJoined[idx].serverId : null
   }
 
   const phaseLabel = PHASE_LABEL[phase] || phase
@@ -196,8 +194,19 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
         : null
       store.resetGame()
       
-      if (configured && configured.length >= 4) {
-        // 用房主配置的玩家
+      // 联机模式：房主=players[0]，联机玩家=players[1..]，真实人数开局
+      const onlinePlayers = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
+        : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
+
+      if (isHost && onlinePlayers.length > 0) {
+        // 房主 + 联机玩家 = 真实游戏人数
+        const hostName = (() => { try { return localStorage.getItem('rs_player_name') || '房主' } catch { return '房主' } })()
+        store.addPlayer(hostName)
+        onlinePlayers.forEach((jp: any) => {
+          store.addPlayer(String(jp.name || '玩家').slice(0, 8))
+        })
+      } else if (configured && configured.length >= 4) {
+        // 单机/调试：用房主配置的玩家
         configured.forEach((p: any) => store.addPlayer(p.name))
         const fresh = store.players
         configured.forEach((p: any, i: number) => {
@@ -235,10 +244,12 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
           return list ? JSON.parse(list) : []
         } catch { return [] }
       })()
-      // players[0]=房主，players[i]=第i个加入者
-      joined.forEach((serverId: string, idx: number) => {
+      // players[0]=房主，players[i]=第i个加入者（用真实联机玩家列表）
+      const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
+        : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
+      realJoined.forEach((jp: any, idx: number) => {
         const slot = store.players[idx + 1]
-        if (slot) sendRoleToPeer(serverId, slot.id)
+        if (slot) sendRoleToPeer(jp.serverId, slot.id)
       })
       // 延迟广播（等玩家端 ready）
       setTimeout(() => {
@@ -246,12 +257,13 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
         hostSync()
       }, 500)
     } else {
-      // 玩家端：等房主同步
+      // 玩家端：请求房主状态（解决竞态：主动请求，不依赖广播时机）
       netOn('hostMessage', (msg: any) => {
-        if (msg.type === 'game_init') {
-          store.applyRemoteState(msg.state)
-        } else if (msg.type === 'sync') {
-          store.applyRemoteState(msg.state)
+        if (msg.type === 'game_init' || msg.type === 'sync') {
+          if (msg.state) {
+            store.applyRemoteState(msg.state)
+            setLoading(false)
+          }
         } else if (msg.type === 'your_role' && !isSpectator) {
           store.setMyInfo(msg.playerId, msg.identity)
           if (msg.heroId && msg.heroId !== '') {
@@ -260,11 +272,15 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
           }
         } else if (msg.type === 'private_info') {
           setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
-        } else if (msg.type === 'next_phase_ok') {
-          // 房主已推进，本端无需操作
         }
       })
-      setLoading(true)
+      // 主动请求房主状态
+      setTimeout(() => {
+        netToHost({ type: 'request_state' })
+      }, 300)
+      // 兜底：8秒后强制结束（避免永久卡死）
+      const t2 = setTimeout(() => setLoading(false), 8000)
+      return () => clearTimeout(t2)
     }
     const t = setTimeout(() => setLoading(false), 2000)
     return () => clearTimeout(t)
@@ -680,6 +696,19 @@ ${skill.description}`)
     if (!isHost) return
     netOn('playerMessage', (msg: any) => {
       const data = msg.data
+      // 玩家端挂载后请求状态 → 补发身份+状态
+      if (data && data.type === 'request_state') {
+        // 找到该玩家的本地slot（按真实联机玩家列表）
+        const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
+          : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
+        const idx = realJoined.findIndex((jp: any) => jp.serverId === msg.playerId)
+        const slot = idx >= 0 ? store.players[idx + 1] : null
+        if (slot) {
+          sendRoleToPeer(msg.playerId, slot.id)
+        }
+        netBroadcast({ type: 'sync', state: serializeGame() })
+        return
+      }
       if (!data || data.type !== 'action') return
       const { action, data: payload } = data
       const playerId = payload?.playerId
