@@ -75,10 +75,10 @@ function RoleAssignmentPanel() {
             </div>
             <span className="text-[10px] text-slate-400 shrink-0 ml-2">平民</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => store.setCivilianCount(Math.max(3, store.civilianCount - 1))}
+              <button onClick={() => store.setCivilianCount(Math.max(1, store.civilianCount - 1))}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">-</button>
               <span className="w-6 text-center text-xs font-bold text-white">{store.civilianCount}</span>
-              <button onClick={() => store.setCivilianCount(Math.min(8, store.civilianCount + 1))}
+              <button onClick={() => store.setCivilianCount(Math.min(11, store.civilianCount + 1))}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">+</button>
             </div>
             <span className="text-[10px] text-slate-500 ml-auto">{store.killerCount + store.civilianCount}人</span>

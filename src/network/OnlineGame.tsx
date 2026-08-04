@@ -207,10 +207,12 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
           }
         })
       } else {
-        // 默认名单（调试/未配置）
-        const names = botNames && botNames.length > 0 ? botNames
-          : ['狐狸', '熊猫', '猫咪', '兔子', '老虎', '狮子', '狼', '鹿']
-        names.forEach(n => store.addPlayer(n))
+        // 按房间设置的人数生成（杀手+平民）
+        const total = Math.max(4, Math.min(12, store.killerCount + store.civilianCount))
+        const names = botNames && botNames.length > 0
+          ? botNames
+          : Array.from({ length: total }, (_, i) => `玩家${i + 1}`)
+        names.slice(0, total).forEach(n => store.addPlayer(n))
       }
       store.assignIdentities()
       store.loadDefaultMap()
