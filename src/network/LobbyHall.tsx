@@ -155,7 +155,8 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom, onJoinByCode }: Lo
               ))
               })()}
             </div>
-          )}
+          )
+          })()}
         </div>
       </main>
 
