@@ -291,9 +291,10 @@ const httpServer = createServer((req, res) => {
 });
 
 // ============================================
-// WebSocket 服务器 - 实时房间列表
+// WebSocket 服务器 - 房间成员管理 + 消息路由
 // ============================================
 const wss = new WebSocketServer({ server: httpServer });
+const gameRooms = new Map(); // roomId -> { hostWs, hostId, hostName, players: Map<playerId, {ws, name}>, public, maxPlayers, hasPassword }
 
 function broadcastRoomList() {
   const list = [...rooms.values()]
@@ -309,59 +310,218 @@ function broadcastRoomList() {
     }));
   const msg = JSON.stringify({ type: 'room_list', rooms: list });
   wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(msg);
-    }
+    if (client.readyState === 1) client.send(msg);
   });
 }
 
-wss.on('connection', (ws) => {
-  // 连接时推送一次当前房间列表
+function wsSend(ws, obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+function syncRoomListToRoom(room) {
+  // 更新房间列表人数（gameRooms → rooms 注册表）
+  if (rooms.has(room.roomId)) {
+    const r = rooms.get(room.roomId);
+    r.playerCount = room.players.size + 1; // +房主
+    r.updatedAt = Date.now();
+  }
   broadcastRoomList();
+}
+
+function memberList(room) {
+  const list = [{ id: room.hostId, name: room.hostName, isHost: true }];
+  room.players.forEach((p, pid) => {
+    list.push({ id: pid, name: p.name, isHost: false });
+  });
+  return list;
+}
+
+wss.on('connection', (ws) => {
+  broadcastRoomList();
+  ws.playerId = null;
+  ws.roomId = null;
+  ws.isHost = false;
+  ws.playerName = '';
 
   ws.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(raw.toString());
-      switch (msg.type) {
-        case 'room_list_request':
-          broadcastRoomList();
-          break;
-        case 'room_register':
-          // 注册房间（与 HTTP 相同逻辑）
-          if (msg.roomId && !rooms.has(msg.roomId)) {
-            const now = Date.now();
-            rooms.set(msg.roomId, {
-              roomId: msg.roomId,
-              hostId: msg.hostId || '',
-              hostName: (msg.hostName || '房主').slice(0, 20),
-              playerCount: Number(msg.playerCount) || 1,
-              maxPlayers: Number(msg.maxPlayers) || 8,
-              isPublic: !!msg.isPublic,
-              hasPassword: !!msg.hasPassword,
-              createdAt: now,
-              updatedAt: now,
-            });
-            broadcastRoomList();
-          }
-          break;
-        case 'room_update':
-          if (rooms.has(msg.roomId)) {
-            const room = rooms.get(msg.roomId);
-            if (typeof msg.playerCount === 'number') room.playerCount = msg.playerCount;
-            room.updatedAt = Date.now();
-            broadcastRoomList();
-          }
-          break;
-        case 'room_unregister':
-          rooms.delete(msg.roomId);
-          broadcastRoomList();
-          break;
-        default:
-          break;
+    let msg;
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
+
+    switch (msg.type) {
+      // ===== 房间管理 =====
+      case 'room_create': {
+        const roomId = String(msg.roomId || '').trim() || 'room_' + Math.random().toString(36).slice(2, 8);
+        if (gameRooms.has(roomId)) {
+          wsSend(ws, { type: 'error', message: '房间码已存在' });
+          return;
+        }
+        const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
+        ws.playerId = playerId;
+        ws.roomId = roomId;
+        ws.isHost = true;
+        ws.playerName = String(msg.hostName || '房主').slice(0, 20);
+        gameRooms.set(roomId, {
+          roomId,
+          hostWs: ws,
+          hostId: playerId,
+          hostName: ws.playerName,
+          players: new Map(),
+          maxPlayers: Number(msg.maxPlayers) || 8,
+          hasPassword: !!msg.hasPassword,
+        });
+        // 同步到公开房间注册表
+        if (!rooms.has(roomId)) {
+          rooms.set(roomId, {
+            roomId,
+            hostId: playerId,
+            hostName: ws.playerName,
+            playerCount: 1,
+            maxPlayers: Number(msg.maxPlayers) || 8,
+            isPublic: !!msg.isPublic,
+            hasPassword: !!msg.hasPassword,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+        broadcastRoomList();
+        wsSend(ws, { type: 'room_created', roomId, playerId, isHost: true });
+        break;
       }
-    } catch (e) {
-      // 忽略无效消息
+
+      case 'room_join': {
+        const roomId = String(msg.roomId || '').trim();
+        const room = gameRooms.get(roomId);
+        if (!room) {
+          wsSend(ws, { type: 'error', message: '房间不存在' });
+          return;
+        }
+        if (room.players.size + 1 >= room.maxPlayers) {
+          wsSend(ws, { type: 'error', message: '房间已满' });
+          return;
+        }
+        const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
+        const name = String(msg.playerName || '玩家').slice(0, 20);
+        ws.playerId = playerId;
+        ws.roomId = roomId;
+        ws.isHost = false;
+        ws.playerName = name;
+        room.players.set(playerId, { ws, name });
+        // 通知房主
+        wsSend(room.hostWs, { type: 'player_joined', playerId, name });
+        // 通知玩家自己
+        wsSend(ws, { type: 'room_joined', roomId, playerId, isHost: false, players: memberList(room) });
+        // 通知其他玩家
+        room.players.forEach((p, pid) => {
+          if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name });
+        });
+        syncRoomListToRoom(room);
+        break;
+      }
+
+      case 'room_leave': {
+        const room = gameRooms.get(ws.roomId);
+        if (!room) return;
+        if (ws.isHost) {
+          // 房主离开 → 解散房间
+          room.players.forEach((p) => wsSend(p.ws, { type: 'room_closed', message: '房主已离开' }));
+          rooms.delete(room.roomId);
+          const rm = rooms.get(room.roomId);
+          if (rm) { recordHistory(rm); rooms.delete(room.roomId); }
+          gameRooms.delete(room.roomId);
+        } else if (ws.playerId) {
+          room.players.delete(ws.playerId);
+          room.players.forEach((p) => wsSend(p.ws, { type: 'player_left', playerId: ws.playerId, name: ws.playerName }));
+          wsSend(room.hostWs, { type: 'player_left', playerId: ws.playerId, name: ws.playerName });
+          syncRoomListToRoom(room);
+        }
+        break;
+      }
+
+      // ===== 消息路由 =====
+      case 'to_host': {
+        // 玩家 → 房主
+        const room = gameRooms.get(ws.roomId);
+        if (room && !ws.isHost && ws.playerId) {
+          wsSend(room.hostWs, { type: 'from_player', playerId: ws.playerId, name: ws.playerName, data: msg.data });
+        }
+        break;
+      }
+
+      case 'to_players': {
+        // 房主 → 所有玩家
+        const room = gameRooms.get(ws.roomId);
+        if (room && ws.isHost) {
+          room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: msg.data }));
+        }
+        break;
+      }
+
+      case 'to_peer': {
+        // 房主 → 指定玩家
+        const room = gameRooms.get(ws.roomId);
+        if (room && ws.isHost && msg.peerId) {
+          const target = room.players.get(msg.peerId);
+          if (target) wsSend(target.ws, { type: 'from_host', data: msg.data });
+        }
+        break;
+      }
+
+      case 'room_list_request':
+        broadcastRoomList();
+        break;
+
+      case 'room_register':
+        if (msg.roomId && !rooms.has(msg.roomId)) {
+          const now = Date.now();
+          rooms.set(msg.roomId, {
+            roomId: msg.roomId,
+            hostId: msg.hostId || '',
+            hostName: (msg.hostName || '房主').slice(0, 20),
+            playerCount: Number(msg.playerCount) || 1,
+            maxPlayers: Number(msg.maxPlayers) || 8,
+            isPublic: !!msg.isPublic,
+            hasPassword: !!msg.hasPassword,
+            createdAt: now,
+            updatedAt: now,
+          });
+          broadcastRoomList();
+        }
+        break;
+
+      case 'room_update':
+        if (rooms.has(msg.roomId)) {
+          const room = rooms.get(msg.roomId);
+          if (typeof msg.playerCount === 'number') room.playerCount = msg.playerCount;
+          room.updatedAt = Date.now();
+          broadcastRoomList();
+        }
+        break;
+
+      case 'room_unregister':
+        rooms.delete(msg.roomId);
+        broadcastRoomList();
+        break;
+
+      default:
+        break;
     }
+  });
+
+  ws.on('close', () => {
+    // 断开连接时清理房间
+    const room = gameRooms.get(ws.roomId);
+    if (room) {
+      if (ws.isHost) {
+        room.players.forEach((p) => wsSend(p.ws, { type: 'room_closed', message: '房主已断开连接' }));
+        gameRooms.delete(room.roomId);
+      } else if (ws.playerId) {
+        room.players.delete(ws.playerId);
+        room.players.forEach((p) => wsSend(p.ws, { type: 'player_left', playerId: ws.playerId, name: ws.playerName }));
+        wsSend(room.hostWs, { type: 'player_left', playerId: ws.playerId, name: ws.playerName });
+        syncRoomListToRoom(room);
+      }
+    }
+    broadcastRoomList();
   });
 });
 

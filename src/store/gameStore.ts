@@ -30,6 +30,10 @@ const initialState: GameState = {
   dronePlayerId: null,
   droneRound: 0,
   roundSkillUsage: {},
+  myPlayerId: '',
+  myIdentity: 'civilian',
+  myPlayerId: '',
+  myIdentity: 'civilian',
 };
 
 // 阶段顺序（游戏循环：action→move×4→death→vote→vote_result→循环）
@@ -70,6 +74,8 @@ interface GameStore extends GameState {
   updatePlayerName: (id: string, name: string) => void;
   setPlayerIdentity: (id: string, identity: 'killer' | 'civilian') => void;
   setPlayerHero: (id: string, heroId: string) => void;
+  applyRemoteState: (state: any) => void;
+  setMyInfo: (playerId: string, identity: 'killer' | 'civilian') => void;
 
   // 地图编辑
   addLocation: (name: string, x: number, y: number) => void;
@@ -166,6 +172,46 @@ export const useGameStore = create<GameStore>()(
       set((state) => {
         const p = state.players.find((x) => x.id === id);
         if (p) p.heroId = heroId;
+      }),
+
+    // 应用房主同步的游戏状态（玩家端）
+    setMyInfo: (playerId, identity) =>
+      set((state) => {
+        state.myPlayerId = playerId;
+        state.myIdentity = identity;
+        const me = state.players.find((p) => p.id === playerId);
+        if (me) me.identity = identity;
+      }),
+
+    applyRemoteState: (remote) =>
+      set((state) => {
+        if (!remote) return;
+        if (Array.isArray(remote.players)) {
+          // 保留本地身份信息（身份由房主私发，不入广播）
+          const myIdentity = state.myIdentity || '';
+          const myPlayerId = state.myPlayerId || '';
+          state.players = remote.players.map((rp: any) => {
+            const local = state.players.find((p: any) => p.id === rp.id);
+            return {
+              ...rp,
+              identity: (local && local.identity) || (rp.id === myPlayerId ? (myIdentity || 'civilian') : 'civilian'),
+            };
+          });
+        }
+        if (remote.phase) state.phase = remote.phase;
+        if (typeof remote.round === 'number') state.round = remote.round;
+        if (remote.winner !== undefined) state.winner = remote.winner;
+        if (Array.isArray(remote.locations)) state.locations = remote.locations;
+        if (Array.isArray(remote.blockedLocations)) state.blockedLocations = remote.blockedLocations;
+        if (Array.isArray(remote.cutConnections)) state.cutConnections = remote.cutConnections;
+        if (Array.isArray(remote.kungFuActivePlayers)) state.kungFuActivePlayers = remote.kungFuActivePlayers;
+        if (Array.isArray(remote.pendingAttacks)) state.pendingAttacks = remote.pendingAttacks;
+        if (Array.isArray(remote.events)) state.events = remote.events;
+        if (remote.locationVisits) state.locationVisits = remote.locationVisits;
+        if (remote.droneLocationId !== undefined) state.droneLocationId = remote.droneLocationId;
+        if (remote.dronePlayerId !== undefined) state.dronePlayerId = remote.dronePlayerId;
+        if (remote.trackedPlayerId !== undefined) state.trackedPlayerId = remote.trackedPlayerId;
+        if (Array.isArray(remote.trackRecords)) state.trackRecords = remote.trackRecords;
       }),
 
     addPlayer: (name) =>

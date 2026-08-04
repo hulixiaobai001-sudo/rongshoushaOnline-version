@@ -4,7 +4,7 @@
  * 
  * 使用方式：
  *   房主: createRoom().then(room => ...)
- *   玩家: joinRoom(roomId).then(room => ...)
+ *   玩家: joinRoom(roomId, myName).then(room => ...)
  */
 
 const PEERJS_HOST = '0.peerjs.com'
@@ -13,9 +13,11 @@ const PEERJS_PATH = '/'
 
 let peer = null
 let connections = new Map()  // peerId -> DataConnection
+let playerNames = new Map()  // peerId -> name
 let roomId = null
 let isHost = false
 let myId = null
+let myName = ''
 
 // 回调函数（由外部注册）
 const callbacks = {
@@ -72,19 +74,27 @@ export async function createRoom(customId) {
       console.log('[P2P] 玩家加入:', playerId)
 
       conn.on('data', (data) => {
-        if (callbacks.onPlayerAction) {
+        if (data && data.type === 'join') {
+          // 玩家上报名字
+          const name = String(data.name || '玩家').slice(0, 20)
+          playerNames.set(playerId, name)
+          broadcast({ type: 'player_joined', playerId, name })
+          if (callbacks.onPlayerJoin) callbacks.onPlayerJoin(playerId, name)
+        } else if (callbacks.onPlayerAction) {
           callbacks.onPlayerAction({ playerId, ...data })
         }
       })
 
       conn.on('close', () => {
+        const name = playerNames.get(playerId)
         connections.delete(playerId)
-        if (callbacks.onPlayerLeave) callbacks.onPlayerLeave(playerId)
+        playerNames.delete(playerId)
+        broadcast({ type: 'player_left', playerId, name })
+        if (callbacks.onPlayerLeave) callbacks.onPlayerLeave(playerId, name)
       })
 
-      // 通知所有玩家新玩家加入
-      broadcast({ type: 'player_joined', playerId })
-      if (callbacks.onPlayerJoin) callbacks.onPlayerJoin(playerId)
+      // 通知所有玩家新玩家加入（在收到join前先广播ID）
+      broadcast({ type: 'player_joined', playerId, name: '连接中...' })
     })
 
     peer.on('error', (err) => {
@@ -97,8 +107,9 @@ export async function createRoom(customId) {
 /**
  * 加入房间
  */
-export async function joinRoom(targetRoomId) {
+export async function joinRoom(targetRoomId, playerName) {
   await loadPeerJS()
+  myName = String(playerName || '玩家').slice(0, 20)
   
   return new Promise((resolve, reject) => {
     peer = new Peer(generateId(), {
@@ -117,6 +128,8 @@ export async function joinRoom(targetRoomId) {
         isHost = false
         roomId = targetRoomId
         connections.set(targetRoomId, conn)
+        // 上报自己的名字
+        conn.send({ type: 'join', name: myName })
         console.log('[P2P] 已加入房间:', targetRoomId)
         resolve({ roomId: targetRoomId, playerId: id, isHost: false })
       })
@@ -152,19 +165,32 @@ export function broadcast(data) {
 }
 
 /**
+ * 发送数据给房主（玩家用）
+ */
+export function sendToHost(data) {
+  if (isHost) {
+    if (callbacks.onPlayerAction) callbacks.onPlayerAction({ playerId: myId, ...data })
+    return
+  }
+  const hostConn = connections.get(roomId)
+  if (hostConn && hostConn.open) {
+    hostConn.send(data)
+  }
+}
+
+/**
+ * 房主发送数据给指定玩家（私发身份等）
+ */
+export function sendToPeer(peerId, data) {
+  const conn = connections.get(peerId)
+  if (conn && conn.open) conn.send(data)
+}
+
+/**
  * 玩家发送操作给房主
  */
 export function sendAction(action, data = {}) {
-  if (isHost) {
-    // 房主模式下直接本地处理
-    if (callbacks.onPlayerAction) callbacks.onPlayerAction({ playerId: myId, action, data })
-    return
-  }
-  // 发送给房主
-  const hostConn = connections.get(roomId)
-  if (hostConn && hostConn.open) {
-    hostConn.send({ action, data })
-  }
+  sendToHost({ type: 'game_action', action, data })
 }
 
 /**
@@ -186,10 +212,12 @@ export function disconnect() {
   connections.forEach((conn) => conn.close())
   if (peer) peer.destroy()
   connections.clear()
+  playerNames.clear()
   peer = null
   roomId = null
   isHost = false
   myId = null
+  myName = ''
 }
 
 /**
@@ -204,7 +232,14 @@ export function on(event, fn) {
  * 获取状态
  */
 export function getState() {
-  return { isHost, roomId, myId, playerCount: connections.size + (isHost ? 1 : 0) }
+  return { isHost, roomId, myId, myName, playerCount: connections.size + (isHost ? 1 : 0) }
+}
+
+/**
+ * 获取加入玩家名字列表
+ */
+export function getPlayerNames() {
+  return Object.fromEntries(playerNames)
 }
 
 function generateId() {

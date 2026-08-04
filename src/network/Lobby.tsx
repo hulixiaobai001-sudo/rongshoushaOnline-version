@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { createRoom, joinRoom, disconnect, on, broadcast, MSG, getState } from './peerjs'
+import { netCreateRoom, netJoinRoom, netLeaveRoom, netDisconnect, netOn, netBroadcast, netGetState } from './netClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -220,26 +220,41 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }, [])
 
   useEffect(() => {
-    on('playerJoin', (playerId: string, name?: string) => {
+    netOn('playerJoin', (msg: any) => {
       setPlayers((prev: string[]) => {
-        if (!prev.includes(playerId)) return [...prev, playerId]
+        if (!prev.includes(msg.playerId)) return [...prev, msg.playerId]
         return prev
       })
+      // 记录加入顺序（供游戏私发身份）
+      try {
+        const order = localStorage.getItem('rs_join_order')
+        const list = order ? JSON.parse(order) : []
+        if (!list.includes(msg.playerId)) {
+          list.push(msg.playerId)
+          localStorage.setItem('rs_join_order', JSON.stringify(list))
+        }
+      } catch { /* ignore */ }
+      if (msg.name) setPlayerNames(prev => ({ ...prev, [msg.playerId]: msg.name }))
       if (isSpectator) {
-        setStatus(prev => prev + `\n👁️ ${name || '观战者'} 以观战模式加入`)
+        setStatus(prev => prev + `\n👁️ ${msg.name || '观战者'} 以观战模式加入`)
       }
     })
-    on('playerLeave', (playerId: string) => {
-      setPlayers((prev: string[]) => prev.filter((id: string) => id !== playerId))
+    netOn('playerLeave', (msg: any) => {
+      setPlayers((prev: string[]) => prev.filter((id: string) => id !== msg.playerId))
     })
     // 玩家端：监听房主指令（收到 start_game 进入游戏）
-    on('hostCommand', (data: any) => {
-      if (data && (data.command === 'start_game' || data.type === 'start_game')) {
+    netOn('hostMessage', (data: any) => {
+      if (data && (data.type === 'start_game' || data.command === 'start_game')) {
         setStatus('房主已开始游戏！')
         setInGame(true)
       }
     })
-    return () => { disconnect() }
+    netOn('roomClosed', () => {
+      setStatus('房间已关闭')
+      setMode(null)
+      setInGame(false)
+    })
+    return () => { netDisconnect() }
   }, [])
 
   const handleCreateRoom = async (customCode?: string) => {
@@ -256,7 +271,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setLoading(true)
     setStatus('正在创建房间...')
     try {
-      const room = await createRoom(customCode)
+      const room = await netCreateRoom(customCode || '', name, { isPublic: roomPublic })
       setMode('host')
       setRoomCode(room.roomId)
       setPlayers([room.playerId])
@@ -305,7 +320,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setLoading(true)
     setStatus('正在加入房间...')
     try {
-      const room = await joinRoom(inputCode.trim())
+      const room = await netJoinRoom(inputCode.trim(), name)
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', inputCode.trim())
       localStorage.setItem('rs_room_role', 'player')
@@ -332,7 +347,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       wsUnregisterRoom(roomCode)
     }
     closeRoomSocket()
-    disconnect()
+    netLeaveRoom()
+    netDisconnect()
     setMode(null)
     setRoomCode('')
     setPlayers([])
@@ -371,11 +387,11 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleStartGame = () => {
-    broadcast({ type: MSG.HOST_STATE, command: 'start_game' })
+    netBroadcast({ type: 'start_game' })
     setInGame(true)
   }
 
-  const currentRoom = getState()
+  const currentRoom = netGetState()
 
   // 如果在游戏中
   if (inGame) {
