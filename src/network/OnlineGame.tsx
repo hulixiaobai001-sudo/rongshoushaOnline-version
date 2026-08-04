@@ -1366,6 +1366,7 @@ ${skill.description}`)
       {/* ═══ 弹窗 ═══ */}
       {popup && <PopupOverlay popup={popup} onClose={() => setPopup(null)}
         players={players} currentPhase={phase} currentPlayerName={currentPlayer?.name || '玩家'}
+        onExit={onLeave}
         onRename={(name: string) => {
           if (!currentPlayer) return
           if (isHost) {
@@ -1855,7 +1856,7 @@ function RulesPopup({ onClose }: { onClose: () => void }) {
 //  弹窗覆盖层
 // ═══════════════════════════════════════════════════
 function PopupOverlay({
-  popup, onClose, players, currentPhase, currentPlayerName, onRename
+  popup, onClose, players, currentPhase, currentPlayerName, onRename, onExit
 }: {
   popup: PopupState
   onClose: () => void
@@ -1863,6 +1864,7 @@ function PopupOverlay({
   currentPhase: string
   currentPlayerName?: string
   onRename?: (name: string) => void
+  onExit?: () => void
 }) {
   if (popup.type === 'settings') {
     return (
@@ -1888,14 +1890,6 @@ function PopupOverlay({
                   className="text-slate-400 hover:text-white text-xs underline">{currentPlayerName || '玩家'}</button>
               </div>
               <div className="flex items-center justify-between">
-                <span>音效</span>
-                <span className="text-slate-500 text-xs">MVP</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>版本</span>
-                <span className="text-slate-500 text-xs">MVP 0.0.1v-内测工作室测试</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span>玩家数</span>
                 <span className="text-slate-500 text-xs">{players.length} 人</span>
               </div>
@@ -1903,8 +1897,21 @@ function PopupOverlay({
                 <span>当前阶段</span>
                 <span className="text-slate-500 text-xs">{PHASE_LABEL[currentPhase] || '游戏中'}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span>版本</span>
+                <span className="text-slate-500 text-xs">MVP 0.0.1v</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>音效</span>
+                <span className="text-slate-500 text-xs">未开放</span>
+              </div>
             </div>
-            <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
+            <div className="space-y-2">
+              <Button onClick={onClose} className="w-full bg-slate-700 hover:bg-slate-600 text-xs h-8">关闭</Button>
+              <Button onClick={() => {
+                if (confirm('确定退出游戏吗？')) { onExit?.() }
+              }} className="w-full bg-red-700 hover:bg-red-600 text-xs h-8">退出游戏</Button>
+            </div>
           </CardContent>
         </Card>
       </div>
