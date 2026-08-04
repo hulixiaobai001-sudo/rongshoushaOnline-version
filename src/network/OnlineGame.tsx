@@ -346,6 +346,11 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
     }
 
     if (interaction === 'skill_target' && selectedSkill) {
+      // 对玩家技能：点击地点时提示选择玩家
+      if (selectedSkill.targetType === 'same_location_player' || selectedSkill.targetType === 'any_player') {
+        info('请选择玩家', `【${selectedSkill.name}】只能对玩家使用，请点击地图上的玩家头像`)
+        return
+      }
       // 断路：选择两个地点
       if (selectedSkill.id === 'zhangyang_cut_connection') {
         if (cutPair.length === 0) {
@@ -704,6 +709,16 @@ ${skill.description}`)
           if (payload?.targetId) {
             store.executeGunShot(playerId, payload.targetId)
             hostSync()
+          }
+          break
+        }
+        case 'rename': {
+          if (payload?.name) {
+            const p = players.find((x: any) => x.id === payload.playerId)
+            if (p) {
+              store.updatePlayerName(p.id, String(payload.name).slice(0, 8))
+              hostSync()
+            }
           }
           break
         }
@@ -1819,6 +1834,24 @@ function PopupOverlay({
             </div>
             <Separator className="bg-slate-700" />
             <div className="space-y-3 text-sm text-slate-300">
+              <div className="flex items-center justify-between">
+                <span>玩家名</span>
+                <button onClick={() => {
+                  const nn = prompt('修改玩家名（8字以内）：', currentPlayer?.name || '玩家')
+                  if (nn && nn.trim() && currentPlayer) {
+                    const name = nn.trim().slice(0, 8)
+                    if (isHost) {
+                      store.updatePlayerName(currentPlayer.id, name)
+                      hostSync()
+                    } else {
+                      netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
+                      // 本地也改（等房主广播覆盖）
+                      store.updatePlayerName(currentPlayer.id, name)
+                    }
+                  }
+                }}
+                  className="text-slate-400 hover:text-white text-xs underline">{currentPlayer?.name || '玩家'}</button>
+              </div>
               <div className="flex items-center justify-between">
                 <span>音效</span>
                 <span className="text-slate-500 text-xs">MVP</span>

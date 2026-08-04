@@ -60,9 +60,30 @@ function RoleAssignmentPanel() {
       <CardContent className="p-3">
         <button onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-between text-xs font-bold text-indigo-400">
-          <span>🎭 玩家配置（{players.length}/12 人 · 🔴杀手 {totalKillers} · 🔵平民 {players.length - totalKillers}）</span>
+          <span>🎭 房间设置（{players.length}/12 人 · 🔴杀手 {totalKillers} · 🔵平民 {players.length - totalKillers}）</span>
           <span>{expanded ? '收起' : '展开'}</span>
         </button>
+        {expanded && (
+          <div className="mt-2 mb-3 flex items-center gap-2 bg-slate-900/40 rounded-lg p-2">
+            <span className="text-[10px] text-slate-400 shrink-0">杀手</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => store.setKillerCount(Math.max(1, store.killerCount - 1))}
+                className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">-</button>
+              <span className="w-6 text-center text-xs font-bold text-white">{store.killerCount}</span>
+              <button onClick={() => store.setKillerCount(Math.min(4, store.killerCount + 1))}
+                className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">+</button>
+            </div>
+            <span className="text-[10px] text-slate-400 shrink-0 ml-2">平民</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => store.setCivilianCount(Math.max(3, store.civilianCount - 1))}
+                className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">-</button>
+              <span className="w-6 text-center text-xs font-bold text-white">{store.civilianCount}</span>
+              <button onClick={() => store.setCivilianCount(Math.min(8, store.civilianCount + 1))}
+                className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">+</button>
+            </div>
+            <span className="text-[10px] text-slate-500 ml-auto">{store.killerCount + store.civilianCount}人</span>
+          </div>
+        )}
         {expanded && (
           <div className="mt-2 space-y-2">
             {/* 添加玩家 */}
@@ -132,47 +153,6 @@ function RoleAssignmentPanel() {
             <p className="text-[9px] text-slate-500 text-center">点击身份切换 🔴杀手/🔵平民 · 下拉选英雄 · 开局后生效</p>
           </div>
         )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ═══════════════════════════════════════════════════
-//  调试模式设置组件
-// ═══════════════════════════════════════════════════
-function DebugSettings() {
-  const store = useGameStore()
-  const killerCount = store.killerCount
-  const civilianCount = store.civilianCount
-
-  return (
-    <Card className="bg-slate-800 border-amber-700">
-      <CardContent className="p-3 space-y-2">
-        <div className="flex items-center gap-2 mb-1">
-          <Bug className="w-4 h-4 text-amber-400" />
-          <span className="text-xs font-bold text-amber-400">调试设置</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-300">杀手人数</span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => store.setKillerCount(Math.max(1, killerCount - 1))}
-              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">-</button>
-            <span className="w-8 text-center text-sm font-bold text-white">{killerCount}</span>
-            <button onClick={() => store.setKillerCount(Math.min(4, killerCount + 1))}
-              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">+</button>
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-300">平民人数</span>
-          <div className="flex items-center gap-1">
-            <button onClick={() => store.setCivilianCount(Math.max(3, civilianCount - 1))}
-              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">-</button>
-            <span className="w-8 text-center text-sm font-bold text-white">{civilianCount}</span>
-            <button onClick={() => store.setCivilianCount(Math.min(8, civilianCount + 1))}
-              className="w-6 h-6 rounded bg-slate-700 text-white text-xs hover:bg-slate-600">+</button>
-          </div>
-        </div>
-        <p className="text-[10px] text-slate-500">总计：{killerCount + civilianCount} 名玩家（4-12人）</p>
       </CardContent>
     </Card>
   )
@@ -415,7 +395,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
             <div className="w-16 h-16 rounded-full bg-amber-900/50 border-2 border-amber-500 flex items-center justify-center mx-auto">
               <span className="text-3xl">⚠️</span>
             </div>
-            <h2 className="text-lg font-bold text-white">联机模式 · 开发中</h2>
+            <h2 className="text-lg font-bold text-white">联机模式</h2>
             <p className="text-sm text-slate-300">
               截止目前，联机功能尚未开发完成，可能会出现各种 bug。
             </p>
@@ -472,7 +452,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
               <div className="text-center mb-4">
                 <Wifi className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
                 <h2 className="text-lg font-bold text-white">联机模式</h2>
-                <p className="text-xs text-slate-400 mt-1">通过 WiFi 进行 P2P 直连，无需服务器</p>
+                <p className="text-xs text-slate-400 mt-1">通过服务器联机，全网可玩</p>
               </div>
 
               {/* 房间可见性 */}
@@ -582,6 +562,24 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-4 h-4 text-slate-400" />
                     <span className="text-sm text-slate-300">玩家列表</span>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const nn = prompt('修改你的名字（8字以内）：', myName || '玩家')
+                      if (nn && nn.trim()) {
+                        const name = nn.trim().slice(0, 8)
+                        setMyName(name)
+                        try { localStorage.setItem('rs_player_name', name) } catch {}
+                        setPlayerNames(prev => ({ ...prev, [players[0]]: name }))
+                        // 房间列表更新房主名
+                        if (mode === 'host' && roomCode) {
+                          fetch(window.location.origin + '/api/rooms/' + encodeURIComponent(roomCode), {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ hostName: name }),
+                          }).catch(() => {})
+                        }
+                      }
+                    }}
+                      className="ml-auto h-6 text-[10px] text-indigo-400 hover:text-indigo-300">改名</Button>
                     <Badge variant="outline" className="ml-auto text-xs text-slate-400 border-slate-600">
                       {players.length} 人
                     </Badge>
@@ -615,12 +613,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                 </CardContent>
               </Card>
 
-              {/* 房主设置（身份分配） */}
-              {mode === 'host' && (
-                <DebugSettings />
-              )}
-
-              {/* 角色分配面板 */}
+              {/* 房主设置（合并面板） */}
               {mode === 'host' && (
                 <RoleAssignmentPanel />
               )}
@@ -662,7 +655,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
               <div className="text-center py-8">
                 <RefreshCw className="w-8 h-8 text-emerald-500 mx-auto animate-spin mb-3" />
                 <p className="text-sm text-slate-400">等待房主开始游戏...</p>
-                <p className="text-xs text-slate-600 mt-2">请确保与房主在同一 WiFi 网络</p>
+                <p className="text-xs text-slate-600 mt-2">等待房主开始游戏...</p>
               </div>
             </>
           )}
