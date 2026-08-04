@@ -156,6 +156,17 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
     }
   }
 
+  // 房主：根据本地玩家ID找对应的服务器peerId（用于私发）
+  const peerIdOf = (localPlayerId: string) => {
+    try {
+      const order = localStorage.getItem('rs_join_order')
+      const list = order ? JSON.parse(order) : []
+      // players[0]=房主，players[i]=第i个加入者
+      const idx = store.players.findIndex((p: any) => p.id === localPlayerId) - 1
+      return idx >= 0 && idx < list.length ? list[idx] : null
+    } catch { return null }
+  }
+
   const phaseLabel = PHASE_LABEL[phase] || phase
   const day = PHASE_DAY_MAP[phase] ?? null
   const isMovePhase = phase.startsWith('move')
@@ -245,6 +256,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
             const p = store.players.find((x: any) => x.id === msg.playerId)
             if (p) p.heroId = msg.heroId
           }
+        } else if (msg.type === 'private_info') {
+          setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
         } else if (msg.type === 'next_phase_ok') {
           // 房主已推进，本端无需操作
         }
@@ -349,7 +362,12 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
             return
           }
           confirm(`切断 ${locA?.name} ↔ ${locB?.name} 的道路？`, () => {
-            store.severConnection(first, locId)
+            if (isHost) {
+              store.severConnection(first, locId)
+              hostSync()
+            } else {
+              reportAction('skill', { playerId: currentPlayer?.id, skillId: 'zhangyang_cut_connection', locA: first, locB: locId })
+            }
             setCutPair([])
             resetInteraction()
             info('断路成功', `${locA?.name} ↔ ${locB?.name} 的道路已被切断`)
@@ -589,6 +607,16 @@ export function OnlineGame({ isHost, isSpectator, botNames, onLeave }: OnlineGam
 ${skill.description}`)
     }
 
+    // 联机：玩家端上报技能使用，房主执行并广播
+    if (!isHost) {
+      reportAction('skill', {
+        playerId: currentPlayer?.id,
+        skillId: skill.id,
+        targetId: targetPlayerId,
+        targetLocationId: targetLocationId,
+      })
+    }
+
     resetInteraction()
     setSkillsOpen(false)
   }
@@ -696,12 +724,26 @@ ${skill.description}`)
               else if (skill.id === 'fengming_teleport') activateTeleport(playerId)
               else if (skill.id === 'yeyu_stealth') applyHalt(playerId)
               else if (skill.id === 'yanzhuo_suplex' && payload.targetId) applyHalt(payload.targetId)
-              else if ((skill.id === 'xiling_kill_same_room') && payload.targetId) killPlayer(payload.targetId, playerId)
+              else if (skill.id === 'xiling_kill_same_room' && payload.targetId) killPlayer(payload.targetId, playerId)
+              else if (skill.id === 'kexiong_investigate' || skill.id === 'tianyi_investigate_same_room') {
+                // 探查类：结果只发给施法者
+                const target = players.find((p: any) => p.id === payload.targetId)
+                if (target) {
+                  netToPeer(peerIdOf(playerId), {
+                    type: 'private_info',
+                    text: `【查验】${target.name} 的身份是：${target.identity === 'killer' ? '杀手' : '平民'}`,
+                  })
+                }
+              }
               else if (skill.id === 'baiye_track' && payload.targetId) store.setTrackedPlayer(payload.targetId)
+              else if (skill.id === 'zhangyang_cut_connection' && payload.locA && payload.locB) store.severConnection(payload.locA, payload.locB)
               else if (skill.id === 'wangli_big_shot' && payload.targetLocationId) {
                 players.filter((p: any) => p.locationId === payload.targetLocationId && p.status === 'alive').forEach((p: any) => applyHalt(p.id))
               }
               else if (skill.id === 'jiangfeng_drone') store.setDroneState(playerId, players.find((p: any) => p.id === playerId)?.locationId || '', round)
+              else if (skill.id === 'lilongxiang_gunshot' && payload.targetId) store.executeGunShot(playerId, payload.targetId)
+              // 标记技能已使用
+              store.markSkillUsed(playerId, sk)
               hostSync()
             }
           }
