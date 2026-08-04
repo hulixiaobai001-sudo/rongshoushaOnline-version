@@ -90,6 +90,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
   const voteCollector = useRef<Array<{ voterId: string; targetId: string }>>([])
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
@@ -249,16 +250,17 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         const slot = store.players[idx + 1]
         if (slot) sendRoleToPeer(jp.serverId, slot.id)
       })
-      // 延迟广播（等玩家端 ready）
-      setTimeout(() => {
-        netBroadcast({ type: 'game_init', state: serializeGame() })
+      // 立即广播 + 持续同步（每2秒，玩家端即使错过单次消息也能收到）
+      netBroadcast({ type: 'game_init', state: serializeGame() })
+      hostSync()
+      syncTimerRef.current = setInterval(() => {
         hostSync()
-      }, 500)
+      }, 2000)
     } else {
       // 玩家端：请求房主状态（解决竞态：主动请求，不依赖广播时机）
       netOn('hostMessage', (msg: any) => {
         if (msg.type === 'game_init' || msg.type === 'sync') {
-          if (msg.state) {
+          if (msg.state && Array.isArray(msg.state.players) && msg.state.players.length > 0) {
             store.applyRemoteState(msg.state)
             setLoading(false)
           }
@@ -281,7 +283,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       return () => clearTimeout(t2)
     }
     const t = setTimeout(() => setLoading(false), 2000)
-    return () => clearTimeout(t)
+    return () => {
+      clearTimeout(t)
+      if (syncTimerRef.current) { clearInterval(syncTimerRef.current); syncTimerRef.current = null }
+    }
   }, [])
 
   // ── 点击的地点信息 ──
