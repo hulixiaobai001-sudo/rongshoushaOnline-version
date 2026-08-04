@@ -92,8 +92,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
   const voteCollector = useRef<Array<{ voterId: string; targetId: string }>>([])
 
   // 阶段变更时重置移动状态
-  useEffect(() => { setHasMoved(false); setHasAttacked(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
-  // 攻击次数按轮刷新（投票结束后重置）
+  useEffect(() => { setHasMoved(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
+  // 攻击次数按轮刷新（投票结束后重置，阶段变化不重置）
   useEffect(() => { setHasAttacked(false) }, [round])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
@@ -496,8 +496,16 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       // 普通攻击（杀手通用）
       case 'basic_kill':
         if (targetPlayerId) {
-          store.killPlayer(targetPlayerId, playerId)
-          setHasAttacked(true)
+          if (isHost) {
+            store.killPlayer(targetPlayerId, playerId)
+            store.consumeAttackCharge(playerId, undefined)
+            if (currentPlayer) currentPlayer.normalAttackRemaining = 0
+            hostSync()
+          } else {
+            // 玩家端：本地标记已攻击+减次数，房主处理后会广播覆盖
+            setHasAttacked(true)
+            if (currentPlayer) currentPlayer.normalAttackRemaining = 0
+          }
           const target = players.find(p => p.id === targetPlayerId)
           info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
         }
@@ -1315,14 +1323,22 @@ ${skill.description}`)
           {/* 中：攻击按钮（杀手专用） */}
           {!isSpectator && currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={() => {
-              if (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0) { info('已攻击过', '本轮只能攻击一次，投票结束后刷新'); return }
+              if (hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)) {
+                info('已攻击过', '本回合你已经刀过人了，投票结束后刷新')
+                return
+              }
               if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
               setSelectedSkill({ id: 'basic_kill', name: '攻击', description: '', type: 'active', targetType: 'same_location_player', limit: 'unlimited', usedCount: 0, maxUses: 99, usablePhase: [] } as any)
               setInteraction('skill_target')
             }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${hasAttacked ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600 text-white'}`}>
+              disabled={hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
+                hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)
+                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  : 'bg-red-700 hover:bg-red-600 text-white'
+              }`}>
               <Swords className="w-3.5 h-3.5" />
-              {currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0 ? '已攻击' : '刀人'}
+              {hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0) ? '已刀人' : '刀人'}
             </button>
           )}
 
