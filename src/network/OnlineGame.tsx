@@ -93,6 +93,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setHasAttacked(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
+  // 攻击次数按轮刷新（投票结束后重置）
+  useEffect(() => { setHasAttacked(false) }, [round])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
   const currentPlayer = isSpectator
@@ -122,6 +124,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       heroId: p.heroId, halted: p.halted, teleportReady: p.teleportReady,
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed,
+      normalAttackRemaining: p.normalAttackRemaining,
+      asylumAttackRemaining: p.asylumAttackRemaining,
     })),
     phase: store.phase, round: store.round, winner: store.winner,
     locations: store.locations.map((l: any) => ({ ...l })),
@@ -238,12 +242,6 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     // 联机同步初始化
     if (isHost) {
       // 房主：私发身份给各玩家 + 广播初始状态
-      const joined = (() => {
-        try {
-          const list = localStorage.getItem('rs_join_order')
-          return list ? JSON.parse(list) : []
-        } catch { return [] }
-      })()
       // players[0]=房主，players[i]=第i个加入者（用真实联机玩家列表）
       const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
         : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
@@ -757,8 +755,12 @@ ${skill.description}`)
           // 技能：找到技能定义执行
           const sk = payload?.skillId
           if (sk === 'basic_kill' && payload?.targetId) {
-            killPlayer(payload.targetId, playerId)
-            hostSync()
+            const attacker = players.find((p: any) => p.id === playerId)
+            if (attacker && (attacker.normalAttackRemaining || 0) > 0) {
+              killPlayer(payload.targetId, playerId)
+              store.consumeAttackCharge(playerId, undefined)
+              hostSync()
+            }
           } else if (sk) {
             // 从英雄数据找技能
             const hero = players.find((p: any) => p.id === playerId)
@@ -1313,14 +1315,14 @@ ${skill.description}`)
           {/* 中：攻击按钮（杀手专用） */}
           {!isSpectator && currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={() => {
-              if (hasAttacked) { info('已攻击过', '本阶段你已经攻击过了'); return }
+              if (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0) { info('已攻击过', '本轮只能攻击一次，投票结束后刷新'); return }
               if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
               setSelectedSkill({ id: 'basic_kill', name: '攻击', description: '', type: 'active', targetType: 'same_location_player', limit: 'unlimited', usedCount: 0, maxUses: 99, usablePhase: [] } as any)
               setInteraction('skill_target')
             }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${hasAttacked ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600 text-white'}`}>
               <Swords className="w-3.5 h-3.5" />
-              {hasAttacked ? '已攻击' : '刀人'}
+              {currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0 ? '已攻击' : '刀人'}
             </button>
           )}
 
