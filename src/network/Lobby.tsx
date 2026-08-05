@@ -262,8 +262,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       const room = await netCreateRoom(customCode || '', name, { isPublic: roomPublic })
       setMode('host')
       setRoomCode(room.roomId)
-      setPlayers([room.playerId])
-      setPlayerNames({[room.playerId]: name})
+      setPlayers([])
+      setPlayerNames({})
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', room.roomId)
       localStorage.setItem('rs_room_role', 'host')
@@ -375,8 +375,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleStartGame = () => {
-    // 保存联机玩家信息（排除房主自己，players[0]=房主）
-    const joinList = players.slice(1).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))
+    // 保存联机玩家信息（用房主自己的ID精确排除，Set去重）
+    const myId = netGetState().playerId
+    const joinList = [...new Set(players)].filter((pid: string) => pid !== myId).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))
     try {
       localStorage.setItem('rs_join_players', JSON.stringify(joinList))
     } catch { /* ignore */ }
@@ -392,7 +393,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       <OnlineGame
         isHost={mode === 'host'}
         isSpectator={isSpectator}
-        joinedPlayers={players.slice(1).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
+        joinedPlayers={[...new Set(players)].filter((pid: string) => pid !== netGetState().playerId).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
         debugMode={debugMode}
         botNames={botPlayerNames}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
@@ -595,35 +596,35 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                     }}
                       className="ml-auto h-6 text-[10px] text-indigo-400 hover:text-indigo-300">改名</Button>
                     <Badge variant="outline" className="ml-auto text-xs text-slate-400 border-slate-600">
-                      {players.length} 人
+                      {players.length + 1} 人
                     </Badge>
                   </div>
-                  {players.length === 0 ? (
-                    <p className="text-xs text-slate-500 text-center py-4">暂无玩家加入</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {players.map((id, i) => {
-                        const isHost = i === 0
-                        const isBot = id.startsWith('bot_')
-                        const name = isHost ? (playerNames[id] || myName || '房主')
-                          : isBot ? `空壳${id.slice(-1)}`
-                          : (playerNames[id] || `玩家${i}`)
-                        return (
-                          <div key={id}
-                            className={`flex items-center gap-2 text-sm rounded px-2 py-1.5 ${
-                              isBot ? 'bg-slate-900/30 text-slate-500' : 'bg-slate-900/50 text-slate-300'
-                            }`}>
-                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
-                            <span className={isHost ? 'font-medium text-amber-400' : ''}>
-                              {name}
-                            </span>
-                            {isHost && <span className="text-[9px] text-amber-500/70 ml-1">(房主)</span>}
-                            {isBot && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
-                          </div>
-                        )
-                      })}
+                  <div className="space-y-1">
+                    {/* 房主（编号1） */}
+                    <div className="flex items-center gap-2 text-sm rounded px-2 py-1.5 bg-amber-900/20 text-amber-300">
+                      <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-xs flex items-center justify-center font-bold shrink-0">1</span>
+                      <span className="font-medium">房主（玩家名：{myName || '房主'}）</span>
                     </div>
-                  )}
+                    {/* 联机玩家 */}
+                    {players.map((id, i) => {
+                      const isBot = id.startsWith('bot_')
+                      const name = isBot ? `空壳${id.slice(-1)}`
+                        : (playerNames[id] || `玩家${i + 2}`)
+                      return (
+                        <div key={id}
+                          className={`flex items-center gap-2 text-sm rounded px-2 py-1.5 ${
+                            isBot ? 'bg-slate-900/30 text-slate-500' : 'bg-slate-900/50 text-slate-300'
+                          }`}>
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 2}</span>
+                          <span>玩家名：{name}</span>
+                          {isBot && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
+                        </div>
+                      )
+                    })}
+                    {players.length === 0 && (
+                      <p className="text-xs text-slate-500 text-center py-2">等待玩家加入...</p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
