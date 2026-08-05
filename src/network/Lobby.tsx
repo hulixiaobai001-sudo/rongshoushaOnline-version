@@ -35,6 +35,19 @@ function RoleAssignmentPanel() {
     setNewName('')
   }
 
+  // 人数设置 → 同步玩家列表（调试台绝对生效）
+  const syncPlayers = () => {
+    const total = Math.max(4, Math.min(12, store.killerCount + store.civilianCount))
+    // 先补够，再删多
+    while (store.players.length < total) {
+      store.addPlayer(`玩家${store.players.length + 1}`)
+    }
+    while (store.players.length > total) {
+      const last = store.players[store.players.length - 1]
+      if (last) store.removePlayer(last.id)
+    }
+  }
+
   const removePlayer = (id: string) => {
     store.removePlayer(id)
   }
@@ -67,18 +80,18 @@ function RoleAssignmentPanel() {
           <div className="mt-2 mb-3 flex items-center gap-2 bg-slate-900/40 rounded-lg p-2">
             <span className="text-[10px] text-slate-400 shrink-0">杀手</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => store.setKillerCount(Math.max(1, store.killerCount - 1))}
+              <button onClick={() => { store.setKillerCount(Math.max(1, store.killerCount - 1)); syncPlayers() }}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">-</button>
               <span className="w-6 text-center text-xs font-bold text-white">{store.killerCount}</span>
-              <button onClick={() => store.setKillerCount(Math.min(4, store.killerCount + 1))}
+              <button onClick={() => { store.setKillerCount(Math.min(4, store.killerCount + 1)); syncPlayers() }}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">+</button>
             </div>
             <span className="text-[10px] text-slate-400 shrink-0 ml-2">平民</span>
             <div className="flex items-center gap-1">
-              <button onClick={() => store.setCivilianCount(Math.max(1, store.civilianCount - 1))}
+              <button onClick={() => { store.setCivilianCount(Math.max(1, store.civilianCount - 1)); syncPlayers() }}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">-</button>
               <span className="w-6 text-center text-xs font-bold text-white">{store.civilianCount}</span>
-              <button onClick={() => store.setCivilianCount(Math.min(11, store.civilianCount + 1))}
+              <button onClick={() => { store.setCivilianCount(Math.min(11, store.civilianCount + 1)); syncPlayers() }}
                 className="w-5 h-5 rounded bg-slate-700 text-white text-[10px] hover:bg-slate-600">+</button>
             </div>
             <span className="text-[10px] text-slate-500 ml-auto">{store.killerCount + store.civilianCount}人</span>
