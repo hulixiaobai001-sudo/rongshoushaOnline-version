@@ -173,6 +173,7 @@ function RoleAssignmentPanel() {
 }
 
 export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
+  const store = useGameStore()
   const [mode, setMode] = useState<'host' | 'join' | null>(null)
   const [roomCode, setRoomCode] = useState('')
   const [inputCode, setInputCode] = useState('')
