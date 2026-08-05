@@ -213,15 +213,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
           store.addPlayer(String(jp.name || '玩家').slice(0, 8))
         })
       } else if (configured && configured.length >= 4) {
-        // 单机/调试：用房主配置的玩家
+        // 单机/调试：用房主配置的玩家（身份/英雄由下方统一恢复）
         configured.forEach((p: any) => store.addPlayer(p.name))
-        const fresh = store.players
-        configured.forEach((p: any, i: number) => {
-          if (fresh[i]) {
-            if (p.identity) fresh[i].identity = p.identity
-            if (p.heroId) fresh[i].heroId = p.heroId
-          }
-        })
       } else {
         // 按房间设置的人数生成（杀手+平民）
         const total = Math.max(4, Math.min(12, store.killerCount + store.civilianCount))
@@ -229,6 +222,16 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
           ? botNames
           : Array.from({ length: total }, (_, i) => `玩家${i + 1}`)
         names.slice(0, total).forEach(n => store.addPlayer(n))
+      }
+      // 统一恢复手动配置的身份/英雄（按创建顺序对应，任何分支都生效）
+      if (configured && configured.length > 0) {
+        const fresh = store.players
+        configured.forEach((p: any, i: number) => {
+          if (fresh[i]) {
+            if (p.identity && (p.identity === 'killer' || p.identity === 'civilian')) fresh[i].identity = p.identity
+            if (p.heroId) fresh[i].heroId = p.heroId
+          }
+        })
       }
       store.assignIdentities()
       store.loadDefaultMap()
