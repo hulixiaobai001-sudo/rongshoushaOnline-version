@@ -142,6 +142,7 @@ function RoleAssignmentPanel() {
                       <option value="yeyu">夜羽</option>
                       <option value="baiye">白野</option>
                       <option value="tianyi">天燚</option>
+                    <option value="yanzhuo">言浊</option>
                       <option value="jiangfeng">江枫</option>
                     </select>
                     <button onClick={() => removePlayer(p.id)}
