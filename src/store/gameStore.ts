@@ -696,15 +696,6 @@ export const useGameStore = create<GameStore>()(
         if (!state.locationVisits[locationId].includes(playerId)) {
           state.locationVisits[locationId].push(playerId);
         }
-        // 如果被移动的玩家是被白野追踪的目标，记录追踪
-        if (state.trackedPlayerId === playerId && toLoc) {
-          state.trackRecords.push({
-            round: state.round,
-            phase: state.phase,
-            action: `移动到 ${toLoc.name}`,
-            locationId,
-          });
-        }
       }),
 
     /** 记录一次攻击（行动阶段使用，不立即处理死亡，结算阶段统一结算） */
@@ -716,13 +707,14 @@ export const useGameStore = create<GameStore>()(
         const attacker = state.players.find((p) => p.id === attackerId);
         if (!target || !attacker || target.status !== 'alive' || attacker.status !== 'alive') return;
 
-        // ── 地点效果：一大队（禁止攻击）──
+        // ── 地点效果：一大队（禁止攻击）——攻击者在此不能攻击 ──
         const targetLoc = state.locations.find((l) => l.id === target.locationId);
-        if (targetLoc?.effect?.type === 'no_attack') {
+        const attackerLoc = state.locations.find((l) => l.id === attacker.locationId);
+        if (attackerLoc?.effect?.type === 'no_attack') {
           state.events.push({
             id: generateId('evt'), round: state.round, phase: state.phase,
             timestamp: Date.now(), type: 'info',
-            description: `【一大队·禁武】${targetLoc.name} 内禁止攻击！${attacker.name} 的攻击被阻止`,
+            description: `【一大队·禁武】${attackerLoc.name} 内禁止攻击！${attacker.name} 的攻击被阻止`,
           });
           return; // 攻击被阻止
         }

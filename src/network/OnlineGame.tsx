@@ -515,13 +515,24 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         if (targetPlayerId) {
           if (isHost) {
             store.killPlayer(targetPlayerId, playerId)
-            store.consumeAttackCharge(playerId, undefined)
-            if (currentPlayer) currentPlayer.normalAttackRemaining = 0
+            // 阿萨姆疯人院：攻击者在此攻击消耗疯人院次数（不消耗普通次数）
+            const me = players.find((p: any) => p.id === playerId)
+            const myLoc = me ? locations.find((l: any) => l.id === me.locationId) : null
+            const inAsylum = myLoc?.effect?.type === 'asylum_extra_attack'
+            store.consumeAttackCharge(playerId, inAsylum ? 'asylum_extra_attack' : undefined)
+            if (currentPlayer) {
+              if (inAsylum) currentPlayer.asylumAttackRemaining = 0
+              else currentPlayer.normalAttackRemaining = 0
+            }
             hostSync()
           } else {
             // 玩家端：本地标记已攻击+减次数，房主处理后会广播覆盖
             setHasAttacked(true)
-            if (currentPlayer) currentPlayer.normalAttackRemaining = 0
+            if (currentPlayer) {
+              const myLoc2 = locations.find((l: any) => l.id === currentPlayer.locationId)
+              if (myLoc2?.effect?.type === 'asylum_extra_attack') currentPlayer.asylumAttackRemaining = 0
+              else currentPlayer.normalAttackRemaining = 0
+            }
           }
           const target = players.find(p => p.id === targetPlayerId)
           info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
@@ -781,10 +792,17 @@ ${skill.description}`)
           const sk = payload?.skillId
           if (sk === 'basic_kill' && payload?.targetId) {
             const attacker = players.find((p: any) => p.id === playerId)
-            if (attacker && (attacker.normalAttackRemaining || 0) > 0) {
-              killPlayer(payload.targetId, playerId)
-              store.consumeAttackCharge(playerId, undefined)
-              hostSync()
+            if (attacker) {
+              const aLoc = attacker.locationId ? locations.find((l: any) => l.id === attacker.locationId) : null
+              const inAsylum = aLoc?.effect?.type === 'asylum_extra_attack'
+              const hasAttack = inAsylum
+                ? (attacker.asylumAttackRemaining || 0) > 0
+                : (attacker.normalAttackRemaining || 0) > 0
+              if (hasAttack) {
+                killPlayer(payload.targetId, playerId)
+                store.consumeAttackCharge(playerId, inAsylum ? 'asylum_extra_attack' : undefined)
+                hostSync()
+              }
             }
           } else if (sk) {
             // 从英雄数据找技能
