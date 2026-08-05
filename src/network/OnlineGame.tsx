@@ -135,6 +135,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     kungFuActivePlayers: store.kungFuActivePlayers,
     pendingAttacks: store.pendingAttacks,
     events: store.events.slice(-20),
+    roundSkillUsage: store.roundSkillUsage,
     locationVisits: store.locationVisits,
     droneLocationId: store.droneLocationId,
     dronePlayerId: store.dronePlayerId,
@@ -439,6 +440,14 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         return
       }
     }
+    // once_per_round 技能每轮限一次
+    if (skill.limit === 'once_per_round') {
+      const usedThisRound = (roundSkillUsage && roundSkillUsage[skill.id]) || 0
+      if (usedThisRound >= skill.maxUses) {
+        info('已使用', `【${skill.name}】每轮仅能使用${skill.maxUses}次`)
+        return
+      }
+    }
 
     // 根据目标类型处理
     switch (skill.targetType) {
@@ -494,6 +503,9 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     // 标记技能已使用
     if (skill.limit === 'once_per_game') {
       store.markSkillUsed(playerId, skill.id)
+    }
+    if (skill.limit === 'once_per_round') {
+      store.incrementRoundSkillUsage(skill.id)
     }
 
     // 执行技能效果
@@ -805,6 +817,10 @@ ${skill.description}`)
               else if (skill.id === 'lilongxiang_gunshot' && payload.targetId) store.executeGunShot(playerId, payload.targetId)
               // 标记技能已使用
               store.markSkillUsed(playerId, sk)
+              const skillLimit = skill.limit
+              if (skillLimit === 'once_per_round') {
+                store.incrementRoundSkillUsage(sk)
+              }
               hostSync()
             }
           }
