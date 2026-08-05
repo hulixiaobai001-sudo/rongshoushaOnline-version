@@ -232,7 +232,7 @@ export const HERO_POOL: Hero[] = [
         limit: 'once_per_game',
         usedCount: 0,
         maxUses: 1,
-        usablePhase: ['move1', 'move2', 'move4'],
+        usablePhase: ['move1', 'move2', 'move3', 'move4'],
       },
     ],
   },

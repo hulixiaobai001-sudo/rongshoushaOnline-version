@@ -589,10 +589,14 @@ export const useGameStore = create<GameStore>()(
         // 普通阶段推进
         const next = getNextPhase(state.phase);
 
-        // 离开移动阶段时清除停步效果
+        // 离开移动阶段时清除停步效果和疾行（疾行仅当前移动阶段有效）
         if (state.phase.startsWith('move')) {
           state.players.forEach((p) => {
             if (p.halted) p.halted = false;
+            if (p.doubleMoveActive) {
+              p.doubleMoveActive = false;
+              p.doubleMoveFirstDone = false;
+            }
           });
         }
 
@@ -687,14 +691,6 @@ export const useGameStore = create<GameStore>()(
             player.doubleMoveActive = false;
             player.doubleMoveFirstDone = false;
           }
-        }
-        // 记录地点经过（凌宇神社效果使用）
-        if (!state.locationVisits[locationId]) {
-          state.locationVisits[locationId] = [];
-        }
-        // 去重：同一轮中同一玩家只记录一次
-        if (!state.locationVisits[locationId].includes(playerId)) {
-          state.locationVisits[locationId].push(playerId);
         }
       }),
 

@@ -264,6 +264,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
           if (msg.state && Array.isArray(msg.state.players) && msg.state.players.length > 0) {
             store.applyRemoteState(msg.state)
             setLoading(false)
+            // 还没收到自己的身份 → 重新请求（request_state会触发身份补发）
+            if (!store.myPlayerId && !isSpectator) {
+              setTimeout(() => { netToHost({ type: 'request_state' }) }, 300)
+            }
           }
         } else if (msg.type === 'your_role' && !isSpectator) {
           store.setMyInfo(msg.playerId, msg.identity)
@@ -970,6 +974,7 @@ ${skill.description}`)
         {phase === 'vote' ? (
           <VoteSection
             isHost={isHost}
+            voteCollector={voteCollector}
             currentPlayer={currentPlayer} hero={hero}
             alivePlayers={alivePlayers}
             usedSkills={usedSkills}
@@ -1549,8 +1554,9 @@ function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayer
 // ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
-function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase }: {
+function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase, voteCollector }: {
   isHost: boolean;
+  voteCollector?: any;
   currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
   store: any; onNextPhase: () => void;
@@ -1564,9 +1570,11 @@ function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, st
 
   const handleConfirmVote = () => {
     if (isHost) {
-      if (voteTarget) {
-        store.submitVotes([{ voterId: currentPlayer.id, targetId: voteTarget }])
-      }
+      // 合并收集的玩家投票 + 房主自己的投票
+      const votes = [...(voteCollector?.current || [])]
+      if (voteTarget) votes.push({ voterId: currentPlayer.id, targetId: voteTarget })
+      if (votes.length > 0) store.submitVotes(votes)
+      if (voteCollector) voteCollector.current = []
       onNextPhase()
     } else {
       // 玩家端：上报投票和就绪，等房主统一提交
