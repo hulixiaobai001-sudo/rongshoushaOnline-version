@@ -205,6 +205,7 @@ export const useGameStore = create<GameStore>()(
         if (Array.isArray(remote.kungFuActivePlayers)) state.kungFuActivePlayers = remote.kungFuActivePlayers;
         if (Array.isArray(remote.pendingAttacks)) state.pendingAttacks = remote.pendingAttacks;
         if (Array.isArray(remote.events)) state.events = remote.events;
+        if (remote.usedSkills) state.usedSkills = remote.usedSkills;
         if (remote.locationVisits) state.locationVisits = remote.locationVisits;
         if (remote.droneLocationId !== undefined) state.droneLocationId = remote.droneLocationId;
         if (remote.dronePlayerId !== undefined) state.dronePlayerId = remote.dronePlayerId;
@@ -562,6 +563,8 @@ export const useGameStore = create<GameStore>()(
           if (state.winner) return;
           state.round++;
           state.roundSkillUsage = {};
+          // 清空功夫状态（功夫仅当前行动阶段有效）
+          state.kungFuActivePlayers = [];
           state.blockedLocations = [];
           state.locations.forEach(l => { l.isBlocked = false; });
           // 确保存活玩家有位置
@@ -643,6 +646,15 @@ export const useGameStore = create<GameStore>()(
         }
         const toLoc = state.locations.find((l) => l.id === locationId);
         const fromLoc = state.locations.find((l) => l.id === player.locationId);
+        // 封锁地点禁止进入
+        if (toLoc?.isBlocked) {
+          state.events.push({
+            id: generateId('evt'), round: state.round, phase: state.phase,
+            timestamp: Date.now(), type: 'info',
+            description: '【封锁】' + toLoc.name + ' 已被封锁，无法进入',
+          });
+          return;
+        }
         // 志成桥单向检查
         if (fromLoc?.effect?.type === 'bridge_jump' && fromLoc.effect.extraDestinations) {
           const canGo = fromLoc.effect.extraDestinations;
@@ -671,7 +683,8 @@ export const useGameStore = create<GameStore>()(
         }
         // 阿萨姆疯人院【癫狂】效果：每次进入时疯人院攻击次数+1
         if (toLoc?.effect?.type === 'asylum_extra_attack' && player.identity === 'killer') {
-          player.asylumAttackRemaining += 1;
+          // 每轮最多1次额外攻击（防反复进出刷次数）
+          if (player.asylumAttackRemaining < 1) player.asylumAttackRemaining = 1;
           state.events.push({
             id: generateId('evt'), round: state.round, phase: state.phase,
             timestamp: Date.now(), type: 'info',
@@ -1069,7 +1082,7 @@ function handleVoteEnd(state: GameState) {
     if (p.halted) p.halted = false;
     if (p.identity === 'killer') {
       p.normalAttackRemaining = 1;
-      p.asylumAttackRemaining = 1;
+      p.asylumAttackRemaining = 0;
     }
   });
 

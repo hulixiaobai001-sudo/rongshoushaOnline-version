@@ -81,7 +81,8 @@ export function getReachableLocations(
     const [current, dist] = queue.shift()!;
     if (dist > 0 && dist <= maxSteps) {
       const loc = locMap.get(current);
-      if (loc) result.push({ id: current, name: loc.name, steps: dist });
+      // 封锁地点不可达
+      if (loc && !loc.isBlocked) result.push({ id: current, name: loc.name, steps: dist });
     }
     if (dist >= maxSteps) continue;
 

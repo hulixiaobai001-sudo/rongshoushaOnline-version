@@ -51,6 +51,10 @@ function handleMessage(msg: any) {
     case 'room_joined':
       myState = { isHost: false, roomId: msg.roomId, playerId: msg.playerId, playerName: '', isSpectator: !!msg.isSpectator }
       fire('onJoined', msg)
+      // 暴露已有成员列表（玩家加入后看到已在房间的人）
+      if (Array.isArray(msg.players)) {
+        fire('onMembers', msg.players)
+      }
       break
     case 'player_joined':
       fire('onPlayerJoin', msg)
@@ -173,7 +177,7 @@ export function netLeaveRoom() {
 }
 
 /** 注册事件回调 */
-export function netOn(event: 'created' | 'joined' | 'playerJoin' | 'playerLeave' | 'hostMessage' | 'playerMessage' | 'roomClosed' | 'error', fn: NetHandler) {
+export function netOn(event: 'created' | 'joined' | 'playerJoin' | 'playerLeave' | 'hostMessage' | 'playerMessage' | 'roomClosed' | 'members' | 'error', fn: NetHandler) {
   const key = 'on' + event.charAt(0).toUpperCase() + event.slice(1)
   if (!handlers[key]) handlers[key] = []
   handlers[key].push(fn)

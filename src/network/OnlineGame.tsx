@@ -136,6 +136,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     pendingAttacks: store.pendingAttacks,
     events: store.events.slice(-20),
     roundSkillUsage: store.roundSkillUsage,
+    usedSkills: store.usedSkills,
     locationVisits: store.locationVisits,
     droneLocationId: store.droneLocationId,
     dronePlayerId: store.dronePlayerId,
