@@ -539,7 +539,11 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
             }
           }
           const target = players.find(p => p.id === targetPlayerId)
-          info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
+          if (isHost) {
+            info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
+          } else {
+            info('🔪 攻击已发出', `对 ${target?.name || '目标'} 发起攻击，等待结算...`)
+          }
         }
         break
       // ═══════════════════════════════════════════
