@@ -375,8 +375,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleStartGame = () => {
-    // 保存联机玩家信息（供OnlineGame生成真实玩家）
-    const joinList = players.map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))
+    // 保存联机玩家信息（排除房主自己，players[0]=房主）
+    const joinList = players.slice(1).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))
     try {
       localStorage.setItem('rs_join_players', JSON.stringify(joinList))
     } catch { /* ignore */ }
@@ -392,7 +392,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       <OnlineGame
         isHost={mode === 'host'}
         isSpectator={isSpectator}
-        joinedPlayers={players.map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
+        joinedPlayers={players.slice(1).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
         debugMode={debugMode}
         botNames={botPlayerNames}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
