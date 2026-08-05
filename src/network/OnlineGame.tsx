@@ -125,6 +125,9 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       heroId: p.heroId, halted: p.halted, teleportReady: p.teleportReady,
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed,
+      votedFor: p.votedFor,
+      // 已暴露身份的玩家（死亡/枪毙）带真实身份（公开信息）
+      identity: p.isRevealed ? p.identity : undefined,
       normalAttackRemaining: p.normalAttackRemaining,
       asylumAttackRemaining: p.asylumAttackRemaining,
     })),

@@ -192,7 +192,7 @@ export const useGameStore = create<GameStore>()(
             const local = state.players.find((p: any) => p.id === rp.id);
             return {
               ...rp,
-              identity: (local && local.identity) || (rp.id === myPlayerId ? (myIdentity || 'civilian') : 'civilian'),
+              identity: (rp.identity) || (local && local.identity) || (rp.id === myPlayerId ? (myIdentity || 'civilian') : 'civilian'),
             };
           });
         }
