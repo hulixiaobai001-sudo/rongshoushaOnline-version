@@ -226,6 +226,11 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
         if (!prev.includes(msg.playerId)) return [...prev, msg.playerId]
         return prev
       })
+      // 联机玩家同步到房间设置面板（可配置身份/角色）
+      if (msg.name && msg.name !== '连接中...') {
+        const exist = store.players.find((p: any) => p.name === msg.name)
+        if (!exist) store.addPlayer(String(msg.name).slice(0, 8))
+      }
       // 记录加入顺序（供游戏私发身份）
       try {
         const order = localStorage.getItem('rs_join_order')
@@ -242,6 +247,11 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     })
     netOn('playerLeave', (msg: any) => {
       setPlayers((prev: string[]) => prev.filter((id: string) => id !== msg.playerId))
+      // 从房间设置面板移除（按名字，房主保留）
+      if (msg.name && msg.name !== '连接中...') {
+        const target = store.players.find((p: any) => p.name === msg.name)
+        if (target) store.removePlayer(target.id)
+      }
     })
     // 玩家端：监听房主指令（收到 start_game 进入游戏）
     netOn('hostMessage', (data: any) => {
@@ -257,6 +267,13 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       const namesMap: Record<string, string> = {}
       others.forEach((m: any) => { namesMap[m.id] = m.name })
       setPlayerNames(prev => ({ ...prev, ...namesMap }))
+      // 已有成员也同步到房间设置面板
+      others.forEach((m: any) => {
+        if (m.name && m.name !== '连接中...') {
+          const exist = store.players.find((p: any) => p.name === m.name)
+          if (!exist) store.addPlayer(String(m.name).slice(0, 8))
+        }
+      })
     })
     netOn('roomClosed', () => {
       setStatus('房间已关闭')
@@ -285,6 +302,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       setRoomCode(room.roomId)
       setPlayers([])
       setPlayerNames({})
+      // 房主进入房间设置面板（可配置身份/角色）
+      store.resetGame()
+      store.addPlayer(name)
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', room.roomId)
       localStorage.setItem('rs_room_role', 'host')
