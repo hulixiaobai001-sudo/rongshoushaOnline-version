@@ -231,8 +231,12 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         const fresh = store.players
         configured.forEach((p: any, i: number) => {
           if (fresh[i]) {
-            if (p.identity && (p.identity === 'killer' || p.identity === 'civilian')) fresh[i].identity = p.identity
-            if (p.heroId) fresh[i].heroId = p.heroId
+            if (p.identity && (p.identity === 'killer' || p.identity === 'civilian')) {
+              store.setPlayerIdentity(fresh[i].id, p.identity)
+            }
+            if (p.heroId) {
+              store.setPlayerHero(fresh[i].id, p.heroId)
+            }
           }
         })
       }
@@ -279,8 +283,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         } else if (msg.type === 'your_role' && !isSpectator) {
           store.setMyInfo(msg.playerId, msg.identity)
           if (msg.heroId && msg.heroId !== '') {
-            const p = store.players.find((x: any) => x.id === msg.playerId)
-            if (p) p.heroId = msg.heroId
+            store.setPlayerHero(msg.playerId, msg.heroId)
           }
         } else if (msg.type === 'private_info') {
           setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
@@ -531,19 +534,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
             const myLoc = me ? locations.find((l: any) => l.id === me.locationId) : null
             const inAsylum = myLoc?.effect?.type === 'asylum_extra_attack'
             store.consumeAttackCharge(playerId, inAsylum ? 'asylum_extra_attack' : undefined)
-            if (currentPlayer) {
-              if (inAsylum) currentPlayer.asylumAttackRemaining = 0
-              else currentPlayer.normalAttackRemaining = 0
-            }
             hostSync()
           } else {
-            // 玩家端：本地标记已攻击+减次数，房主处理后会广播覆盖
+            // 玩家端：本地标记已攻击，次数由房主广播覆盖
             setHasAttacked(true)
-            if (currentPlayer) {
-              const myLoc2 = locations.find((l: any) => l.id === currentPlayer.locationId)
-              if (myLoc2?.effect?.type === 'asylum_extra_attack') currentPlayer.asylumAttackRemaining = 0
-              else currentPlayer.normalAttackRemaining = 0
-            }
           }
           const target = players.find(p => p.id === targetPlayerId)
           if (isHost) {
