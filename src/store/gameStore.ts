@@ -72,6 +72,7 @@ interface GameStore extends GameState {
   updatePlayerName: (id: string, name: string) => void;
   setPlayerIdentity: (id: string, identity: 'killer' | 'civilian') => void;
   setPlayerHero: (id: string, heroId: string) => void;
+  applyConfig: (configs: Array<{ name: string; identity?: string; heroId?: string }>) => void;
   applyRemoteState: (state: any) => void;
   setMyInfo: (playerId: string, identity: 'killer' | 'civilian') => void;
 
@@ -170,6 +171,18 @@ export const useGameStore = create<GameStore>()(
       set((state) => {
         const p = state.players.find((x) => x.id === id);
         if (p) p.heroId = heroId;
+      }),
+
+    // 批量恢复配置（一次set，避免多次set的引用错位）
+    applyConfig: (configs) =>
+      set((state) => {
+        configs.forEach((cfg, i) => {
+          const p = state.players[i];
+          if (p) {
+            if (cfg.identity && (cfg.identity === 'killer' || cfg.identity === 'civilian')) p.identity = cfg.identity;
+            if (cfg.heroId) p.heroId = cfg.heroId;
+          }
+        });
       }),
 
     // 应用房主同步的游戏状态（玩家端）

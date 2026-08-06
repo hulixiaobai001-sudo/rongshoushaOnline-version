@@ -228,17 +228,9 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       }
       // 统一恢复手动配置的身份/英雄（按创建顺序对应，任何分支都生效）
       if (configured && configured.length > 0) {
-        const fresh = store.players
-        configured.forEach((p: any, i: number) => {
-          if (fresh[i]) {
-            if (p.identity && (p.identity === 'killer' || p.identity === 'civilian')) {
-              store.setPlayerIdentity(fresh[i].id, p.identity)
-            }
-            if (p.heroId) {
-              store.setPlayerHero(fresh[i].id, p.heroId)
-            }
-          }
-        })
+        store.applyConfig(configured.map((p: any) => ({
+          name: p.name, identity: p.identity, heroId: p.heroId,
+        })))
       }
       store.assignIdentities()
       store.loadDefaultMap()
