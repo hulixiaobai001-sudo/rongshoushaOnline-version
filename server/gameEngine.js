@@ -105,7 +105,9 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
     blockedLocations: [], cutConnections: [],
     kungFuActivePlayers: [], pendingAttacks: [],
     usedSkills: {}, roundSkillUsage: {},
-    locationVisits: {}, trackedPlayerId: null, trackRecords: [],
+    locationVisits: {},
+    trackedPlayerId: null, trackRecords: [],
+    trackerPlayerId: null, // 玛丽追踪者（追踪报告仅对其本人可见）
     droneLocationId: null, dronePlayerId: null, droneRound: 0,
     events: [],
   };
@@ -133,8 +135,9 @@ function serializeGame(game, viewerId) {
     usedSkills: game.usedSkills,
     roundSkillUsage: game.roundSkillUsage,
     locationVisits: game.locationVisits,
-    trackedPlayerId: game.trackedPlayerId,
-    trackRecords: game.trackRecords,
+    // 追踪信息：仅追踪者本人可见（防其他玩家窥探玛丽的目标和操作记录）
+    trackedPlayerId: game.trackerPlayerId === viewerId ? game.trackedPlayerId : null,
+    trackRecords: game.trackerPlayerId === viewerId ? game.trackRecords : [],
     droneLocationId: game.droneLocationId,
     dronePlayerId: game.dronePlayerId,
     droneRound: game.droneRound,
@@ -280,6 +283,7 @@ function killPlayer(game, targetId, attackerId) {
     atk.status = 'dead';
     atk.isRevealed = true;
     addEvent(game, `【功夫反弹】${tgt.name} 反杀了 ${atk.name}！`);
+    blockLocation(game, atk.locationId); // 攻击者死亡 → 封锁其所在地点
     checkEnd(game);
     return;
   }
@@ -288,12 +292,14 @@ function killPlayer(game, targetId, attackerId) {
   tgt.status = 'dead';
   tgt.isRevealed = true;
   addEvent(game, `${tgt.name}（${tgt.identity === 'killer' ? '杀手' : '平民'}）被 ${atk.name} 击杀`);
+  blockLocation(game, tgt.locationId); // 死亡地点本轮封锁
 
   // 西部荒野变异
   if (tgtLoc?.effect?.type === 'identity_transform' && tgt.identity === 'civilian') {
     tgt.status = 'alive';
     tgt.identity = 'killer';
     tgt.isRevealed = false;
+    unblockLocation(game, tgt.locationId); // 死而复生 → 撤销封锁
     addEvent(game, `【西部荒野·变异】${tgt.name} 死而复生！身份从平民转变为杀手！`);
     checkEnd(game);
     return;
@@ -428,6 +434,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       if (!t || t.locationId !== p.locationId || t.status !== 'alive') return { ok: false, msg: '目标不在同一地点' };
       if (t.id === p.id) return { ok: false, msg: '不能追踪自己' };
       game.trackedPlayerId = targetId;
+      game.trackerPlayerId = playerId; // 记录追踪者（追踪报告仅本人可见）
       game.trackRecords = [];
       markUsed(game, playerId, skillId);
       return { ok: true };
@@ -493,6 +500,7 @@ function handleVoteEnd(game) {
     game.players.filter(p => p.voteCount === maxVotes && p.status === 'alive').forEach(p => {
       p.status = 'dead'; p.isRevealed = true;
       addEvent(game, `${p.name} 被投票出局（${p.identity === 'killer' ? '杀手' : '平民'}）`);
+      blockLocation(game, p.locationId); // 投票出局者也封锁其地点
     });
   }
   // 清理尸体
@@ -509,7 +517,7 @@ function handleVoteEnd(game) {
     if (p.identity === 'killer') { p.normalAttackRemaining = 1; p.asylumAttackRemaining = 0; }
   });
   game.locationVisits = {};
-  game.trackedPlayerId = null; game.trackRecords = [];
+  game.trackedPlayerId = null; game.trackerPlayerId = null; game.trackRecords = [];
   game.droneLocationId = null; game.dronePlayerId = null;
   game.phase = 'vote_result';
   // 兜底：投票后真人全灭（如调试模式房主被投死）→ 立即判定结束，
@@ -521,6 +529,23 @@ function handleVoteEnd(game) {
 function addEvent(game, text) {
   game.events.push({ round: game.round, phase: game.phase, text, ts: Date.now() });
   if (game.events.length > 50) game.events.shift();
+}
+
+// 封锁地点（死寂荒漠 unblockable 除外）；封锁 = 本轮不可进入
+function blockLocation(game, locId) {
+  const loc = game.locations.find(l => l.id === locId);
+  if (!loc || loc.isBlocked || loc.effect?.type === 'unblockable') return;
+  loc.isBlocked = true;
+  if (!game.blockedLocations.includes(locId)) game.blockedLocations.push(locId);
+  addEvent(game, `🔒 ${loc.name} 因有人在此死亡而被封锁（本轮不可进入）`);
+}
+
+// 解除封锁（西部荒野变异复活时撤销）
+function unblockLocation(game, locId) {
+  const loc = game.locations.find(l => l.id === locId);
+  if (!loc) return;
+  loc.isBlocked = false;
+  game.blockedLocations = game.blockedLocations.filter(id => id !== locId);
 }
 
 export {

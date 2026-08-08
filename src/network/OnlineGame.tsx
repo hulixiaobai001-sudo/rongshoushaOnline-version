@@ -855,6 +855,18 @@ ${skill.description}`)
                         </g>
                       )
                     })}
+                    {/* 封锁标记 */}
+                    {loc.isBlocked && (
+                      <g pointerEvents="none">
+                        <circle cx={loc.x} cy={loc.y} r={5.8}
+                          fill="none" stroke="#dc2626" strokeWidth="0.8" strokeDasharray="1.5,1" />
+                        <text x={loc.x} y={loc.y - 7.5} textAnchor="middle"
+                          fontSize="2.2" fill="#ef4444" fontWeight="700"
+                          style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                          🔒 封锁
+                        </text>
+                      </g>
+                    )}
                     {/* 地点圆圈 */}
                     <circle cx={loc.x} cy={loc.y} r={4.5}
                       fill={isCurrentLoc ? '#4f46e5' : isSelected ? '#92400e' : '#475569'}
@@ -1223,11 +1235,11 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
 
   return (
     <div className="space-y-1 max-h-[100px] overflow-auto">
-      {/* 追踪信息 */}
-      {trackedPlayer && trackRecords && trackRecords.length > 0 && (
+      {/* 追踪信息（标记后即显示，0 条记录也提示——目标还没行动） */}
+      {trackedPlayer && (
         <div>
-          <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}</p>
-          <p className="text-[8px] text-slate-400">{trackRecords.length} 条记录</p>
+          <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}{trackedPlayer.isBot ? ' 🤖' : ''}</p>
+          <p className="text-[8px] text-slate-400">{trackRecords.length} 条记录{trackRecords.length === 0 ? '（等待对方行动）' : ''}</p>
           <button onClick={() => setShowTrack(true)}
             className="text-[8px] text-amber-500 hover:text-amber-400 underline mt-0.5">
             查看详细追踪报告 &gt;

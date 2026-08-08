@@ -65,12 +65,12 @@ export function getReachableLocations(
   const queue: [string, number][] = [[from, 0]];
   const visited = new Set<string>([from]);
 
-  // 志成桥效果：extraDestinations 作为单向可达
+  // 志成桥效果：extraDestinations 作为单向可达（封锁的地点不可达）
   const fromLoc = locMap.get(from);
   if (fromLoc?.effect?.type === 'bridge_jump' && fromLoc.effect.extraDestinations) {
     fromLoc.effect.extraDestinations.forEach((name) => {
       const target = locations.find(l => l.name === name);
-      if (target && !visited.has(target.id)) {
+      if (target && !target.isBlocked && !visited.has(target.id)) {
         visited.add(target.id);
         result.push({ id: target.id, name: target.name, steps: 1 });
       }
@@ -79,15 +79,15 @@ export function getReachableLocations(
 
   while (queue.length > 0) {
     const [current, dist] = queue.shift()!;
-    if (dist > 0 && dist <= maxSteps) {
-      const loc = locMap.get(current);
-      // 封锁地点不可达
-      if (loc && !loc.isBlocked) result.push({ id: current, name: loc.name, steps: dist });
-    }
-    if (dist >= maxSteps) continue;
-
     const loc = locMap.get(current);
     if (!loc) continue;
+    if (dist > 0 && dist <= maxSteps) {
+      // 封锁地点不可达
+      if (!loc.isBlocked) result.push({ id: current, name: loc.name, steps: dist });
+    }
+    if (dist >= maxSteps) continue;
+    // 封锁地点不能作为中转站（不能穿过封锁地点到达更远处）
+    if (loc.isBlocked) continue;
     for (const neighbor of loc.connectedTo) {
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
