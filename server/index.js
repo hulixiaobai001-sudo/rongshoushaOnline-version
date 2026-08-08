@@ -445,27 +445,14 @@ wss.on('connection', (ws) => {
 
       // ===== 消息路由 =====
       case 'to_host': {
-        // 玩家 → 房主（服务器权威模式下转发游戏操作给服务器自己处理）
+        // 玩家 → 服务器（request_state 请求状态）
         const room = gameRooms.get(ws.roomId);
         if (!room) break;
         const d = msg.data;
         if (d && d.type === 'request_state') {
-          // 请求状态 → 服务器直接响应
           const gpId = ws.isHost ? room.game?.players[0].id
             : (room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null);
           if (room.game) wsSend(ws, { type: 'from_host', data: { type: 'sync', state: serializeGame(room.game, gpId) } });
-          break;
-        }
-        if (d && d.type === 'action') {
-          // 转发为服务器操作
-          const msg2 = { type: 'game_action', action: d.action, data: d.data };
-          const room2 = gameRooms.get(ws.roomId);
-          // 直接调用处理（复用逻辑：构造一个假的 ws 处理）
-          // 简化：转发到 game_action 处理函数
-          ws.gameActionPending = msg2;
-        }
-        if (room && !ws.isHost && ws.playerId) {
-          wsSend(room.hostWs, { type: 'from_player', playerId: ws.playerId, name: ws.playerName, data: msg.data });
         }
         break;
       }
