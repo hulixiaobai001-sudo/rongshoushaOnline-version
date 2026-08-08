@@ -170,7 +170,7 @@ export interface GameState {
 
 
   // 每轮重置的技能使用计数（once_per_round 技能）：skillId -> usedCount
-  roundSkillUsage: Record<string, number>;
+  roundSkillUsage: Record<string, Record<string, number>>;
 
   // 联机：我的玩家ID和身份（玩家端从房主私发获取）
   myPlayerId: string;
