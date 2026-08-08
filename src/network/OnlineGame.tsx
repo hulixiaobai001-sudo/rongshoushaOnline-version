@@ -1677,14 +1677,6 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
   const store2 = useGameStore()
   const winner = store2.winner
 
-  // 统计谁投了谁
-  const voteMap: Record<string, string[]> = {}
-  players.forEach((p: any) => {
-    if (p.votedFor) {
-      if (!voteMap[p.votedFor]) voteMap[p.votedFor] = []
-      voteMap[p.votedFor].push(p.name)
-    }
-  })
 
   // 胜利界面
   if (winner) {
@@ -1740,24 +1732,21 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
         <p className="text-sm text-slate-400">无人被投票出局</p>
       )}
 
-      {/* 投票详情 */}
-      {Object.keys(voteMap).length > 0 && (
-        <div className="w-full max-w-xs bg-slate-800/50 rounded-xl p-3 border border-slate-700">
-          <p className="text-xs font-bold text-slate-300 mb-2">📋 投票详情</p>
-          <div className="space-y-1.5">
-            {Object.entries(voteMap).map(([targetId, voters]) => {
-              const target = players.find((p: any) => p.id === targetId)
-              return (
-                <div key={targetId} className="text-[10px] text-slate-400">
-                  <span className="text-white">{target?.name || '未知'}</span>
-                  {' ← '}
-                  {voters.join('、')}
-                </div>
-              )
-            })}
-          </div>
+      {/* 投票详情：每个玩家投了谁 */}
+      <div className="w-full max-w-xs bg-slate-800/50 rounded-xl p-3 border border-slate-700">
+        <p className="text-xs font-bold text-slate-300 mb-2">📋 投票详情</p>
+        <div className="space-y-1.5">
+          {players.map((p: any) => {
+            const target = p.votedFor ? players.find((x: any) => x.id === p.votedFor) : null
+            return (
+              <div key={p.id} className="flex items-center justify-between text-[10px] text-slate-400">
+                <span className="text-white">{p.name}</span>
+                <span>{target ?  : '弃票'}</span>
+              </div>
+            )
+          })}
         </div>
-      )}
+      </div>
 
       <p className="text-xs text-slate-500">存活 {alivePlayers.length} / {players.length}</p>
       <button onClick={onNextPhase}

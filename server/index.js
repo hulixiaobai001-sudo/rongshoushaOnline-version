@@ -121,15 +121,15 @@ const httpServer = createServer((req, res) => {
     // 后台：所有房间（含私密）
     if (url.pathname === '/api/admin/rooms' && req.method === 'GET') {
       if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
-      const list = [...rooms.values()].sort((a, b) => b.createdAt - a.createdAt).map(r => ({
+      // 读取真实活跃房间（gameRooms：WS房间系统）
+      const now = Date.now();
+      const list = [...gameRooms.values()].sort((a, b) => (b.hostWs?.createdAt || 0) - (a.hostWs?.createdAt || 0)).map(r => ({
         roomId: r.roomId,
         hostName: r.hostName,
-        playerCount: r.playerCount,
+        playerCount: r.players.size + 1, // 房主 + 玩家
         maxPlayers: r.maxPlayers,
-        isPublic: r.isPublic,
         hasPassword: !!r.hasPassword,
-        createdAt: r.createdAt,
-        lastHeartbeat: r.updatedAt,
+        createdAt: r.hostWs?.createdAt || now,
       }));
       sendJson(res, 200, { ok: true, rooms: list });
       return;
@@ -147,9 +147,9 @@ const httpServer = createServer((req, res) => {
     if (url.pathname === '/api/admin/stats' && req.method === 'GET') {
       if (!verifyAdmin(req)) { sendJson(res, 401, { ok: false, error: '未授权' }); return; }
       const now = Date.now();
-      const totalPlayers = [...rooms.values()].reduce((s, r) => s + r.playerCount, 0);
+      const totalPlayers = [...gameRooms.values()].reduce((s, r) => s + r.players.size + 1, 0);
       sendJson(res, 200, { ok: true, stats: {
-        activeRooms: rooms.size,
+        activeRooms: gameRooms.size,
         totalPlayers,
         totalGames: roomHistory.length,
         last24hGames: roomHistory.filter(h => now - h.startedAt < 86400000).length,

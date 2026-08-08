@@ -124,7 +124,7 @@ export function Admin({ onBack }: { onBack: () => void }) {
               <h1 className="text-lg font-bold text-white">绒兽杀 · 运营后台</h1>
               <p className="text-xs text-slate-500 mt-1">请输入管理密码</p>
             </div>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+            <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               placeholder="管理密码" className="bg-slate-900 border-slate-600 text-white" />
             {loginError && <p className="text-xs text-red-400">{loginError}</p>}
