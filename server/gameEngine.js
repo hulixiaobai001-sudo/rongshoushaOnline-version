@@ -64,7 +64,7 @@ function shuffle(arr) {
 // ---------- 创建游戏 ----------
 function createGame({ hostName, players: names, killerCount }) {
   const total = names.length;
-  const targetKillers = killerCount > 0 ? Math.min(killerCount, Math.floor(total / 2)) : Math.max(1, Math.floor(total / 2));
+  const targetKillers = killerCount > 0 ? Math.min(killerCount, Math.max(1, Math.floor(total / 4))) : Math.max(1, Math.floor(total / 4));
 
   // 玩家
   const players = names.map((n, i) => ({

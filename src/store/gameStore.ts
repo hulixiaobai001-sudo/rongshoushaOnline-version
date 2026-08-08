@@ -465,8 +465,8 @@ export const useGameStore = create<GameStore>()(
         if (totalPlayers === 0) return;
         // 目标杀手数：优先房主设置，否则动态（约半数）
         const targetKillers = state.killerCount > 0
-          ? Math.min(state.killerCount, Math.floor(totalPlayers / 2))
-          : Math.max(1, Math.floor(totalPlayers / 2));
+          ? Math.min(state.killerCount, Math.max(1, Math.floor(totalPlayers / 4)))
+          : Math.max(1, Math.floor(totalPlayers / 4));
 
         // 未分配身份的玩家（identity 为空）
         const unassigned = state.players.filter(p => p.identity !== 'killer' && p.identity !== 'civilian');

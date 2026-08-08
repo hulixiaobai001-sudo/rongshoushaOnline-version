@@ -95,11 +95,14 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   useEffect(() => { setHasAttacked(false) }, [round])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
-  const currentPlayer = isSpectator
+  const myPlayer = isSpectator
     ? null
     : isHost
       ? (players && players.length > 0 ? players[0] : null)
       : (store.myPlayerId ? players.find(p => p.id === store.myPlayerId) || null : null)
+  // 死亡玩家自动进入观战视角
+  const isDead = myPlayer && myPlayer.status === 'dead'
+  const currentPlayer = isDead ? null : myPlayer
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
 
   // ── 阶段信息 ──
@@ -143,6 +146,17 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
           setLoading(false)
           // 就绪数同步
           if (typeof msg.state.readyCount === 'number') setReadyCount(msg.state.readyCount)
+          // 死亡检测：弹窗提示
+          const myId = store.myPlayerId
+          if (myId) {
+            const myAlive = (msg.state.players || []).find((p: any) => p.id === myId)?.status
+            if (myAlive === 'dead' && !localStorage.getItem('rs_dead_notified_' + myId)) {
+              // 找自己死亡的事件
+              const deathEvt = (msg.state.events || []).slice().reverse().find((e: any) => e.text && e.text.includes(store.players.find((x: any) => x.id === myId)?.name || '你') && (e.text.includes('被') || e.text.includes('出局')))
+              setPopup({ type: 'info', title: '💀 你已死亡', desc: deathEvt ? deathEvt.text : '你已死亡，进入观战视角' })
+              try { localStorage.setItem('rs_dead_notified_' + myId, '1') } catch {}
+            }
+          }
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
           if (!store.myPlayerId && !isSpectator) {
             const me = msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
@@ -811,7 +825,7 @@ ${skill.description}`)
                       </text>
                     )}
                     {/* 玩家图标 - 仅当前地点显示（观战者看全图） */}
-                    {(isCurrentLoc || isSpectator) && locPlayers.map((p, i) => {
+                    {(isCurrentLoc || isSpectator || isDead) && locPlayers.map((p, i) => {
                       const angle = (2 * Math.PI * i) / Math.max(locPlayers.length, 1) - Math.PI / 2
                       const px = loc.x + Math.cos(angle) * 7
                       const py = loc.y + Math.sin(angle) * 7
@@ -1021,9 +1035,9 @@ ${skill.description}`)
 
       {/* ═══ 底部操作栏 ═══ */}
       {/* 观战提示 + 事件日志 */}
-      {isSpectator && (
+      {(isSpectator || isDead) && (
         <div className="shrink-0 border-t border-slate-700 bg-slate-800/70 px-3 py-2">
-          <p className="text-[10px] text-purple-400 font-medium mb-1">👁️ 观战模式 - 全图视角</p>
+          <p className="text-[10px] text-purple-400 font-medium mb-1">{isDead ? '💀 你已死亡 - 观战视角' : '👁️ 观战模式 - 全图视角'}</p>
           <div className="max-h-[80px] overflow-auto space-y-0.5">
             {store.events.slice(-10).map((e: any, i: number) => (
               <p key={i} className="text-[9px] text-slate-500">{e.description}</p>
@@ -1645,7 +1659,7 @@ function PopupOverlay({
               </div>
               <div className="flex items-center justify-between">
                 <span>版本</span>
-                <span className="text-slate-500 text-xs">MVP 0.0.1v</span>
+                <span className="text-slate-500 text-xs">MVP 1.0</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>音效</span>
