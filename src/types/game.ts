@@ -90,6 +90,8 @@ export interface Player {
   // 杀手攻击次数计数器（每轮重置）
   normalAttackRemaining: number;  // 常规攻击剩余次数（非阿萨姆疯人院），每轮初始1
   asylumAttackRemaining: number;  // 阿萨姆疯人院攻击剩余次数，每轮初始1
+
+  isBot?: boolean;  // 空壳玩家标记（联机调试模式：服务器按名字标记，前端据此区分真假玩家）
 }
 
 // ============================================
