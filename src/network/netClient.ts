@@ -171,6 +171,21 @@ export function netToPeer(peerId: string, data: any) {
   send({ type: 'to_peer', peerId, data })
 }
 
+/** 服务器权威：开始游戏（房主） */
+export function netGameStart() {
+  send({ type: 'game_start' })
+}
+
+/** 服务器权威：发送游戏操作 */
+export function netSendGameAction(action: string, data: any = {}) {
+  send({ type: 'game_action', action, data })
+}
+
+/** 服务器权威：发送游戏操作（泛型） */
+export function netGameAction(action: string, data: any = {}) {
+  send({ type: 'game_action', action, data })
+}
+
 /** 离开房间 */
 export function netLeaveRoom() {
   send({ type: 'room_leave' })

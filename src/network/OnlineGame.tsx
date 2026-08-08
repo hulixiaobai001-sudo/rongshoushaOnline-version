@@ -3,7 +3,7 @@ import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations, HERO_POOL_V1_1_IDS } from '@/data/gameData'
 import { unregisterRoom, wsUnregisterRoom } from './roomServer'
-import { netToHost, netBroadcast, netToPeer, netOn } from './netClient'
+import { netToHost, netOn, netSendGameAction } from './netClient'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -90,7 +90,6 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
   const voteCollector = useRef<Array<{ voterId: string; targetId: string }>>([])
-  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
@@ -117,64 +116,6 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     }
   }, [phase])
 
-  // ═══ 联机同步 ═══
-  // 序列化游戏状态（不含身份，身份私发）
-  const serializeGame = () => ({
-    players: store.players.map((p: any) => ({
-      id: p.id, name: p.name, status: p.status, locationId: p.locationId,
-      heroId: p.heroId, halted: p.halted, teleportReady: p.teleportReady,
-      doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
-      isRevealed: p.isRevealed,
-      votedFor: p.votedFor,
-      // 已暴露身份的玩家（死亡/枪毙）带真实身份（公开信息）
-      identity: p.isRevealed ? p.identity : undefined,
-      normalAttackRemaining: p.normalAttackRemaining,
-      asylumAttackRemaining: p.asylumAttackRemaining,
-    })),
-    phase: store.phase, round: store.round, winner: store.winner,
-    locations: store.locations.map((l: any) => ({ ...l })),
-    blockedLocations: store.blockedLocations,
-    cutConnections: store.cutConnections,
-    kungFuActivePlayers: store.kungFuActivePlayers,
-    pendingAttacks: store.pendingAttacks,
-    events: store.events.slice(-20),
-    roundSkillUsage: store.roundSkillUsage,
-    usedSkills: store.usedSkills,
-    locationVisits: store.locationVisits,
-    droneLocationId: store.droneLocationId,
-    dronePlayerId: store.dronePlayerId,
-    trackedPlayerId: store.trackedPlayerId,
-    trackRecords: store.trackRecords,
-  })
-
-  // 房主：广播全量状态
-  const hostSync = () => {
-    if (!isHost) return
-    netBroadcast({ type: 'sync', state: serializeGame() })
-  }
-
-  // 房主：私发身份给对应玩家
-  const sendRoleToPeer = (peerId: string, playerId: string) => {
-    const p = store.players.find((x: any) => x.id === playerId)
-    if (!p) return
-    netToPeer(peerId, { type: 'your_role', playerId, identity: p.identity, heroId: p.heroId })
-  }
-
-  // 上报操作（玩家端）
-  const reportAction = (action: string, data: any) => {
-    if (!isHost) {
-      netToHost({ type: 'action', action, data })
-    }
-  }
-
-  // 房主：根据本地玩家ID找对应的服务器peerId（用于私发）
-  const peerIdOf = (localPlayerId: string) => {
-    const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
-      : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
-    const idx = store.players.findIndex((p: any) => p.id === localPlayerId) - 1
-    return idx >= 0 && idx < realJoined.length ? realJoined[idx].serverId : null
-  }
-
   const phaseLabel = PHASE_LABEL[phase] || phase
   const day = PHASE_DAY_MAP[phase] ?? null
   const isMovePhase = phase.startsWith('move')
@@ -195,105 +136,33 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
     : []
 
-  // ── 初始化：组件挂载时初始化游戏 ──
+  // ── 初始化：等待服务器状态（服务器权威） ──
   useEffect(() => {
-    try {
-      // 保存房主配置的玩家（名字+身份+英雄），进入游戏不覆盖
-      const configured = store.players && store.players.length > 0
-        ? store.players.map((p: any) => ({ name: p.name, identity: p.identity, heroId: p.heroId }))
-        : null
-      store.resetGame()
-      
-      // 联机模式：房主=players[0]，联机玩家=players[1..]，真实人数开局
-      const onlinePlayers = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
-        : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
-
-      if (isHost && onlinePlayers.length > 0) {
-        // 房主 + 联机玩家 = 真实游戏人数
-        const hostName = (() => { try { return localStorage.getItem('rs_player_name') || '房主' } catch { return '房主' } })()
-        store.addPlayer(hostName)
-        onlinePlayers.forEach((jp: any) => {
-          store.addPlayer(String(jp.name || '玩家').slice(0, 8))
-        })
-      } else if (configured && configured.length >= 4) {
-        // 单机/调试：用房主配置的玩家（身份/英雄由下方统一恢复）
-        configured.forEach((p: any) => store.addPlayer(p.name))
-      } else {
-        // 按房间设置的人数生成（杀手+平民）
-        const total = Math.max(4, Math.min(12, store.killerCount + store.civilianCount))
-        const names = botNames && botNames.length > 0
-          ? botNames
-          : Array.from({ length: total }, (_, i) => `玩家${i + 1}`)
-        names.slice(0, total).forEach(n => store.addPlayer(n))
-      }
-      // 统一恢复手动配置的身份/英雄（按创建顺序对应，任何分支都生效）
-      if (configured && configured.length > 0) {
-        store.applyConfig(configured.map((p: any) => ({
-          name: p.name, identity: p.identity, heroId: p.heroId,
-        })))
-      }
-      store.assignIdentities()
-      store.loadDefaultMap()
-      store.assignHeroes()
-      store.randomPlaceAll()
-      // 阶段推进
-      store.nextPhase()
-      store.nextPhase()
-    } catch (e: any) {
-      console.error('Init error:', e)
-      setError(e?.message || String(e))
-      setLoading(false)
-    }
-    // 联机同步初始化
-    if (isHost) {
-      // 房主：私发身份给各玩家 + 广播初始状态
-      // players[0]=房主，players[i]=第i个加入者（用真实联机玩家列表）
-      const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
-        : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
-      realJoined.forEach((jp: any, idx: number) => {
-        const slot = store.players[idx + 1]
-        if (slot) sendRoleToPeer(jp.serverId, slot.id)
-      })
-      // 立即广播 + 持续同步（每2秒，玩家端即使错过单次消息也能收到）
-      netBroadcast({ type: 'game_init', state: serializeGame() })
-      hostSync()
-      syncTimerRef.current = setInterval(() => {
-        hostSync()
-      }, 2000)
-    } else {
-      // 玩家端：请求房主状态（解决竞态：主动请求，不依赖广播时机）
-      netOn('hostMessage', (msg: any) => {
-        if (msg.type === 'game_init' || msg.type === 'sync') {
-          if (msg.state && Array.isArray(msg.state.players) && msg.state.players.length > 0) {
-            store.applyRemoteState(msg.state)
-            setLoading(false)
-            // 还没收到自己的身份 → 重新请求（request_state会触发身份补发）
-            if (!store.myPlayerId && !isSpectator) {
-              setTimeout(() => { netToHost({ type: 'request_state' }) }, 300)
-            }
-          }
-        } else if (msg.type === 'your_role' && !isSpectator) {
-          store.setMyInfo(msg.playerId, msg.identity)
-          if (msg.heroId && msg.heroId !== '') {
-            store.setPlayerHero(msg.playerId, msg.heroId)
-          }
-        } else if (msg.type === 'private_info') {
-          setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
+    const applyServerState = (msg: any) => {
+      if ((msg.type === 'game_init' || msg.type === 'sync') && msg.state) {
+        if (Array.isArray(msg.state.players) && msg.state.players.length > 0) {
+          store.applyRemoteState(msg.state)
+          setLoading(false)
+          // 还没收到自己的身份 → 服务器在game_init时会私发
         }
-      })
-      // 主动请求房主状态
-      setTimeout(() => {
-        netToHost({ type: 'request_state' })
-      }, 300)
-      // 兜底：8秒后强制结束（避免永久卡死）
-      const t2 = setTimeout(() => setLoading(false), 8000)
-      return () => clearTimeout(t2)
+      } else if (msg.type === 'your_role') {
+        store.setMyInfo(msg.playerId, msg.identity)
+        if (msg.heroId && msg.heroId !== '') {
+          store.setPlayerHero(msg.playerId, msg.heroId)
+        }
+      } else if (msg.type === 'private_info') {
+        setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
+      }
     }
-    const t = setTimeout(() => setLoading(false), 2000)
-    return () => {
-      clearTimeout(t)
-      if (syncTimerRef.current) { clearInterval(syncTimerRef.current); syncTimerRef.current = null }
-    }
+
+    netOn('hostMessage', applyServerState)
+    // 主动请求状态（服务器每次操作后广播，但请求一次兜底）
+    setTimeout(() => {
+      netToHost({ type: 'request_state' })
+    }, 300)
+    // 兜底：8秒强制结束
+    const t2 = setTimeout(() => setLoading(false), 8000)
+    return () => clearTimeout(t2)
   }, [])
 
   // ── 点击的地点信息 ──
@@ -353,12 +222,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       }
 
       confirm(`移动到 ${targetLoc.name}？${isTeleport ? ' (传送)' : ''}`, () => {
-        if (isHost) {
-          movePlayer(currentPlayer.id, locId)
-          hostSync()
-        } else {
-          reportAction('move', { playerId: currentPlayer.id, locationId: locId })
-        }
+        // 服务器权威：发送移动操作
+        netSendGameAction('move', { playerId: currentPlayer.id, locationId: locId })
         setSelectedLocationId(locId)
         // 疾行：第一次移动后不锁，第二次才锁
         if (currentPlayer.doubleMoveActive && !currentPlayer.doubleMoveFirstDone) {
@@ -395,12 +260,8 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
             return
           }
           confirm(`切断 ${locA?.name} ↔ ${locB?.name} 的道路？`, () => {
-            if (isHost) {
-              store.severConnection(first, locId)
-              hostSync()
-            } else {
-              reportAction('skill', { playerId: currentPlayer?.id, skillId: 'zhangyang_cut_connection', locA: first, locB: locId })
-            }
+            // 服务器权威：发送断路
+            netSendGameAction('skill', { playerId: currentPlayer?.id, skillId: 'zhangyang_cut_connection', targetId: first, targetLocationId: locId })
             setCutPair([])
             resetInteraction()
             info('断路成功', `${locA?.name} ↔ ${locB?.name} 的道路已被切断`)
@@ -415,7 +276,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         if (!curLoc || !tgtLoc) return
         const isAdjacent = curLoc.connectedTo.includes(locId)
         if (!isAdjacent) { info('无法使用', '只能选择相邻地点'); return }
-        confirm(`对 ${tgtLoc.name} 大力射门？`, () => handleSkillUse(selectedSkill, undefined, locId))
+        confirm(`对 ${tgtLoc.name} 大力射门？`, () => {
+          netSendGameAction('skill', { playerId: currentPlayer?.id, skillId: 'wangli_big_shot', targetLocationId: locId })
+          resetInteraction()
+        })
         return
       }
       handleSkillUse(selectedSkill, undefined, locId)
@@ -519,24 +383,10 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
       // 普通攻击（杀手通用）
       case 'basic_kill':
         if (targetPlayerId) {
-          if (isHost) {
-            store.killPlayer(targetPlayerId, playerId)
-            // 死人沼泽：攻击者在此攻击消耗额外次数（不消耗普通次数）
-            const me = players.find((p: any) => p.id === playerId)
-            const myLoc = me ? locations.find((l: any) => l.id === me.locationId) : null
-            const inAsylum = myLoc?.effect?.type === 'asylum_extra_attack'
-            store.consumeAttackCharge(playerId, inAsylum ? 'asylum_extra_attack' : undefined)
-            hostSync()
-          } else {
-            // 玩家端：本地标记已攻击，次数由房主广播覆盖
-            setHasAttacked(true)
-          }
+          // 服务器权威：攻击由服务器执行
+          setHasAttacked(true)
           const target = players.find(p => p.id === targetPlayerId)
-          if (isHost) {
-            info('🔪 击杀', `成功击杀了 ${target?.name || '目标'}！`)
-          } else {
-            info('🔪 攻击已发出', `对 ${target?.name || '目标'} 发起攻击，等待结算...`)
-          }
+          info('🔪 攻击已发出', `对 ${target?.name || '目标'} 发起攻击，等待结算...`)
         }
         break
       // ═══════════════════════════════════════════
@@ -665,15 +515,13 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
 ${skill.description}`)
     }
 
-    // 联机：玩家端上报技能使用，房主执行并广播
-    if (!isHost) {
-      reportAction('skill', {
-        playerId: currentPlayer?.id,
-        skillId: skill.id,
-        targetId: targetPlayerId,
-        targetLocationId: targetLocationId,
-      })
-    }
+    // 服务器权威：发送技能操作
+    netSendGameAction('skill', {
+      playerId: currentPlayer?.id,
+      skillId: skill.id,
+      targetId: targetPlayerId,
+      targetLocationId: targetLocationId,
+    })
 
     resetInteraction()
     setSkillsOpen(false)
@@ -693,163 +541,13 @@ ${skill.description}`)
       confirm('返回大厅？', () => onLeave())
       return
     }
-    // 玩家端：上报就绪，等房主广播
-    if (!isHost) {
-      reportAction('ready', { playerId: currentPlayer?.id })
+    // 服务器权威：发送准备
+    if (currentPlayer) {
+      netSendGameAction('ready', { playerId: currentPlayer.id })
       setMyReady(true)
-      return
-    }
-    // 房主端：统计就绪
-    setMyReady(true)
-    const newReady = new Set(readyPlayers)
-    if (currentPlayer) newReady.add(currentPlayer.id)
-    setReadyPlayers(newReady)
-    
-    // 自动将空壳玩家标记为已准备（bot_ 开头 或 调试模式下的非当前玩家）
-    const isDebug = botNames && botNames.length > 0
-    alivePlayers.forEach(p => {
-      if (p.id.startsWith('bot_') || (isDebug && p.id !== currentPlayer?.id)) newReady.add(p.id)
-    })
-    setReadyPlayers(newReady)
-    
-    // 检查是否所有存活玩家都已准备
-    const aliveIds = new Set(alivePlayers.map(p => p.id))
-    const allReady = [...aliveIds].every(id => newReady.has(id))
-    
-    if (allReady) {
-      resetInteraction()
-      nextPhase()
-      hostSync()
-    } else {
-      const remaining = alivePlayers.length - newReady.size
-      info('等待就绪', `已就绪 ${newReady.size} / ${alivePlayers.length} 人，还剩 ${remaining} 人未准备`)
+      info('已准备', '等待其他玩家准备...')
     }
   }
-
-  // 房主：处理玩家上报的操作
-  useEffect(() => {
-    if (!isHost) return
-    netOn('playerMessage', (msg: any) => {
-      const data = msg.data
-      // 玩家端挂载后请求状态 → 补发身份+状态
-      if (data && data.type === 'request_state') {
-        // 找到该玩家的本地slot（按真实联机玩家列表）
-        const realJoined = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers
-          : (() => { try { const j = localStorage.getItem('rs_join_players'); return j ? JSON.parse(j) : [] } catch { return [] } })()
-        const idx = realJoined.findIndex((jp: any) => jp.serverId === msg.playerId)
-        const slot = idx >= 0 ? store.players[idx + 1] : null
-        if (slot) {
-          sendRoleToPeer(msg.playerId, slot.id)
-        }
-        netBroadcast({ type: 'sync', state: serializeGame() })
-        return
-      }
-      if (!data || data.type !== 'action') return
-      const { action, data: payload } = data
-      const playerId = payload?.playerId
-      // 只处理存活玩家的操作
-      if (playerId && !players.find((p: any) => p.id === playerId)) return
-      switch (action) {
-        case 'move':
-          if (payload?.locationId) {
-            movePlayer(playerId, payload.locationId)
-            hostSync()
-          }
-          break
-        case 'ready': {
-          setReadyPlayers(prev => {
-            const n = new Set(prev)
-            if (playerId) n.add(playerId)
-            return n
-          })
-          break
-        }
-        case 'vote': {
-          // 房主收集投票（玩家上报后，房主点确认统一提交）
-          if (payload?.targetId) {
-            voteCollector.current.push({ voterId: playerId, targetId: payload.targetId })
-          }
-          break
-        }
-        case 'gunshot': {
-          if (payload?.targetId) {
-            store.executeGunShot(playerId, payload.targetId)
-            hostSync()
-          }
-          break
-        }
-        case 'rename': {
-          if (payload?.name) {
-            const p = players.find((x: any) => x.id === payload.playerId)
-            if (p) {
-              store.updatePlayerName(p.id, String(payload.name).slice(0, 8))
-              hostSync()
-            }
-          }
-          break
-        }
-        case 'skill': {
-          // 技能：找到技能定义执行
-          const sk = payload?.skillId
-          if (sk === 'basic_kill' && payload?.targetId) {
-            const attacker = players.find((p: any) => p.id === playerId)
-            if (attacker) {
-              const aLoc = attacker.locationId ? locations.find((l: any) => l.id === attacker.locationId) : null
-              const inAsylum = aLoc?.effect?.type === 'asylum_extra_attack'
-              const hasAttack = inAsylum
-                ? (attacker.asylumAttackRemaining || 0) > 0
-                : (attacker.normalAttackRemaining || 0) > 0
-              if (hasAttack) {
-                killPlayer(payload.targetId, playerId)
-                store.consumeAttackCharge(playerId, inAsylum ? 'asylum_extra_attack' : undefined)
-                hostSync()
-              }
-            }
-          } else if (sk) {
-            // 从英雄数据找技能
-            const hero = players.find((p: any) => p.id === playerId)
-            const hd = hero?.heroId ? getHeroById(hero.heroId) : null
-            const skill = hd?.skills.find((s: any) => s.id === sk)
-            if (skill) {
-              if (skill.id === 'niangao_kungfu') activateKungFu(playerId)
-              else if (skill.id === 'zhuxun_double_move') activateDoubleMove(playerId)
-              else if (skill.id === 'fengming_teleport') activateTeleport(playerId)
-              else if (skill.id === 'yeyu_stealth') applyHalt(playerId)
-              else if (skill.id === 'yanzhuo_suplex' && payload.targetId) applyHalt(payload.targetId)
-              else if (skill.id === 'xiling_kill_same_room' && payload.targetId) killPlayer(payload.targetId, playerId)
-              else if (skill.id === 'kexiong_investigate' || skill.id === 'tianyi_investigate_same_room') {
-                // 探查类：结果只发给施法者
-                const target = players.find((p: any) => p.id === payload.targetId)
-                if (target) {
-                  netToPeer(peerIdOf(playerId), {
-                    type: 'private_info',
-                    text: `【查验】${target.name} 的身份是：${target.identity === 'killer' ? '杀手' : '平民'}`,
-                  })
-                }
-              }
-              else if (skill.id === 'baiye_track' && payload.targetId) store.setTrackedPlayer(payload.targetId)
-              else if (skill.id === 'zhangyang_cut_connection' && payload.locA && payload.locB) store.severConnection(payload.locA, payload.locB)
-              else if (skill.id === 'wangli_big_shot' && payload.targetLocationId) {
-                players.filter((p: any) => p.locationId === payload.targetLocationId && p.status === 'alive').forEach((p: any) => applyHalt(p.id))
-              }
-              else if (skill.id === 'jiangfeng_drone') store.setDroneState(playerId, players.find((p: any) => p.id === playerId)?.locationId || '', round)
-              else if (skill.id === 'lilongxiang_gunshot' && payload.targetId) store.executeGunShot(playerId, payload.targetId)
-              // 标记技能已使用
-              store.markSkillUsed(playerId, sk)
-              const skillLimit = skill.limit
-              if (skillLimit === 'once_per_round') {
-                store.incrementRoundSkillUsage(sk)
-              }
-              hostSync()
-            }
-          }
-          break
-        }
-        default:
-          break
-      }
-    })
-  }, [isHost])
 
   // ── 加载中 ──
   if (loading) {
@@ -1430,7 +1128,7 @@ ${skill.description}`)
           if (!currentPlayer) return
           if (isHost) {
             store.updatePlayerName(currentPlayer.id, name)
-            hostSync()
+      
           } else {
             netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
             store.updatePlayerName(currentPlayer.id, name)
@@ -1566,21 +1264,12 @@ function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, st
   const gunShotUsed = isLiLongxiang && (usedSkills[currentPlayer?.id || ''] || []).includes('lilongxiang_gunshot')
 
   const handleConfirmVote = () => {
-    if (isHost) {
-      // 合并收集的玩家投票 + 房主自己的投票
-      const votes = [...(voteCollector?.current || [])]
-      if (voteTarget) votes.push({ voterId: currentPlayer.id, targetId: voteTarget })
-      if (votes.length > 0) store.submitVotes(votes)
-      if (voteCollector) voteCollector.current = []
-      onNextPhase()
-    } else {
-      // 玩家端：上报投票和就绪，等房主统一提交
-      if (voteTarget) {
-        netToHost({ type: 'action', action: 'vote', data: { playerId: currentPlayer?.id, targetId: voteTarget } })
-      }
-      netToHost({ type: 'action', action: 'ready', data: { playerId: currentPlayer?.id } })
-      setVoteSubmitted(true)
+    // 服务器权威：发送投票 + 准备
+    if (voteTarget) {
+      netSendGameAction('vote', { playerId: currentPlayer?.id, targetId: voteTarget })
     }
+    netSendGameAction('ready', { playerId: currentPlayer?.id })
+    setVoteSubmitted(true)
   }
 
   return (
@@ -1639,11 +1328,8 @@ function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, st
           </div>
           {gunshotTarget && (
             <button onClick={() => {
-              if (isHost) {
-                store.executeGunShot(currentPlayer.id, gunshotTarget)
-              } else {
-                netToHost({ type: 'action', action: 'gunshot', data: { playerId: currentPlayer?.id, targetId: gunshotTarget } })
-              }
+              // 服务器权威：发送枪毙
+              netSendGameAction('skill', { playerId: currentPlayer?.id, skillId: 'lilongxiang_gunshot', targetId: gunshotTarget })
               setGunshotTarget(null)
             }}
               className="mt-2 w-full py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-bold text-white transition-colors">

@@ -505,10 +505,12 @@ wss.on('connection', (ws) => {
             });
           }
         });
-        // 广播初始状态
+        // 通知所有玩家进入游戏 + 广播初始状态
+        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'game_started' } }));
         const initState = serializeGame(room.game, null);
         room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: initState } }));
-        wsSend(room.hostWs, { type: 'game_started' });
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_started' } });
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_init', state: initState } });
         break;
       }
 

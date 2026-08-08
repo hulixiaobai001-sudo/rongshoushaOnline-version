@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { netCreateRoom, netJoinRoom, netLeaveRoom, netDisconnect, netOn, netBroadcast, netGetState } from './netClient'
+import { netCreateRoom, netJoinRoom, netLeaveRoom, netDisconnect, netOn, netBroadcast, netGetState, netGameStart } from './netClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -258,7 +258,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     })
     // 玩家端：监听房主指令（收到 start_game 进入游戏）
     netOn('hostMessage', (data: any) => {
-      if (data && (data.type === 'start_game' || data.command === 'start_game')) {
+      if (data && (data.type === 'start_game' || data.command === 'start_game' || data.type === 'game_started')) {
         setStatus('房主已开始游戏！')
         setInGame(true)
       }
@@ -420,13 +420,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleStartGame = () => {
-    // 保存联机玩家信息（用房主自己的ID精确排除，Set去重）
-    const myId = netGetState().playerId
-    const joinList = [...new Set(players)].filter((pid: string) => pid !== myId).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))
-    try {
-      localStorage.setItem('rs_join_players', JSON.stringify(joinList))
-    } catch { /* ignore */ }
-    netBroadcast({ type: 'start_game' })
+    // 服务器权威：服务器创建游戏
+    netGameStart()
     setInGame(true)
   }
 
