@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
-import { getReachableLocations } from '@/data/gameData'
+import { getReachableLocations, HERO_POOL_V1_1_IDS } from '@/data/gameData'
 import { unregisterRoom, wsUnregisterRoom } from './roomServer'
 import { netToHost, netBroadcast, netToPeer, netOn } from './netClient'
 import { Button } from '@/components/ui/button'
@@ -1817,7 +1817,7 @@ function HeroPagination() {
   return (
     <ScrollArea className="max-h-[50vh] pr-2">
       <div className="space-y-2">
-        {HERO_POOL.map(hero => (
+        {HERO_POOL.filter((hero: any) => HERO_POOL_V1_1_IDS.includes(hero.id)).map(hero => (
           <div key={hero.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"

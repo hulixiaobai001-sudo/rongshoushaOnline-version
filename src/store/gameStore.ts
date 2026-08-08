@@ -424,16 +424,16 @@ export const useGameStore = create<GameStore>()(
     loadDefaultMap: () =>
       set((state) => {
         const locs: Location[] = [
-          { id: 'loc_shuangyang', name: '双阳', connectedTo: ['loc_ganlu', 'loc_mansidun'], isBlocked: false, x: 60, y: 80 },
-          { id: 'loc_ganlu', name: '甘露之地', connectedTo: ['loc_shuangyang', 'loc_mansidun', 'loc_siji'], isBlocked: false, x: 25, y: 30 },
-          { id: 'loc_mansidun', name: '曼斯顿边境', connectedTo: ['loc_shuangyang', 'loc_ganlu', 'loc_siji'], isBlocked: false, x: 80, y: 60 },
-          { id: 'loc_siji', name: '死寂荒漠', connectedTo: ['loc_ganlu', 'loc_mansidun', 'loc_lande', 'loc_sirenwan', 'loc_xibu', 'loc_sirenzhao'], isBlocked: false, x: 50, y: 35 },
-          { id: 'loc_lande', name: '兰得群峰', connectedTo: ['loc_siji', 'loc_sirenwan'], isBlocked: false, x: 72, y: 18 },
-          { id: 'loc_sirenwan', name: '死人湾', connectedTo: ['loc_siji', 'loc_lande', 'loc_xibu'], isBlocked: false, x: 40, y: 85 },
-          { id: 'loc_xibu', name: '西部荒野', connectedTo: ['loc_siji', 'loc_sirenwan', 'loc_nanyou', 'loc_mancheng'], isBlocked: false, x: 30, y: 60 },
+          { id: 'loc_siji', name: '死寂荒漠', connectedTo: ['loc_ganlu', 'loc_mansidun', 'loc_lande', 'loc_sirenwan', 'loc_xibu', 'loc_sirenzhao'], isBlocked: false, x: 50, y: 45 },
           { id: 'loc_sirenzhao', name: '死人沼泽', connectedTo: ['loc_siji', 'loc_nanyou'], isBlocked: false, x: 50, y: 12 },
-          { id: 'loc_nanyou', name: '南部油田', connectedTo: ['loc_sirenzhao', 'loc_xibu', 'loc_mancheng'], isBlocked: false, x: 15, y: 45 },
-          { id: 'loc_mancheng', name: '曼城', connectedTo: ['loc_xibu', 'loc_nanyou'], isBlocked: false, x: 75, y: 35 },
+          { id: 'loc_ganlu', name: '甘露之地', connectedTo: ['loc_shuangyang', 'loc_mansidun', 'loc_siji'], isBlocked: false, x: 28, y: 25 },
+          { id: 'loc_mansidun', name: '曼斯顿边境', connectedTo: ['loc_shuangyang', 'loc_ganlu', 'loc_siji'], isBlocked: false, x: 72, y: 22 },
+          { id: 'loc_shuangyang', name: '双阳', connectedTo: ['loc_ganlu', 'loc_mansidun'], isBlocked: false, x: 12, y: 50 },
+          { id: 'loc_lande', name: '兰得群峰', connectedTo: ['loc_siji', 'loc_sirenwan'], isBlocked: false, x: 85, y: 45 },
+          { id: 'loc_sirenwan', name: '死人湾', connectedTo: ['loc_siji', 'loc_lande', 'loc_xibu'], isBlocked: false, x: 62, y: 70 },
+          { id: 'loc_xibu', name: '西部荒野', connectedTo: ['loc_siji', 'loc_sirenwan', 'loc_nanyou', 'loc_mancheng'], isBlocked: false, x: 38, y: 78 },
+          { id: 'loc_nanyou', name: '南部油田', connectedTo: ['loc_sirenzhao', 'loc_xibu', 'loc_mancheng'], isBlocked: false, x: 15, y: 80 },
+          { id: 'loc_mancheng', name: '曼城', connectedTo: ['loc_xibu', 'loc_nanyou'], isBlocked: false, x: 78, y: 82 },
         ];
         // 为每个地点绑定效果
         locs.forEach((loc) => {
