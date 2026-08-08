@@ -497,9 +497,9 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
       // ═══════════════════════════════════════════
       case 'tianyi_investigate_same_room':
         if (targetPlayerId) {
+          // 查验结果以服务器私发为准（本地乐观更新时目标身份不可靠）
           const target = players.find(p => p.id === targetPlayerId)
-          const identity = target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'
-          info('👁️ 识破 —— 查验结果', `目标：${target?.name}，身份：${identity}`)
+          info('👁️ 识破已发出', `正在查验 ${target?.name || '目标'}，结果将单独弹出`)
         }
         break
 
@@ -519,8 +519,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
       // ═══════════════════════════════════════════
       case 'baiye_track':
         if (targetPlayerId) {
-          store.setTrackedPlayer(targetPlayerId)
-          store.addTrackRecord(playerId, '开始追踪', currentPlayer?.locationId)
+          // 追踪记录由服务器权威维护（移动/技能/攻击/击杀都会记录），本地不写记录
           const target = players.find(p => p.id === targetPlayerId)
           info('🌿 追踪香囊已标记', `已标记 ${target?.name}，右侧面板将显示其行动记录`)
         }

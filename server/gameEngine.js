@@ -267,6 +267,14 @@ function killPlayer(game, targetId, attackerId) {
   if (!tgt || !atk || tgt.status !== 'alive' || atk.status !== 'alive') return;
   const tgtLoc = game.locations.find(l => l.id === tgt.locationId);
 
+  // 玛丽·追踪香囊：被追踪者的击杀/被杀记录（含功夫反弹等所有致死路径）
+  if (game.trackedPlayerId === attackerId) {
+    game.trackRecords.push({ round: game.round, phase: game.phase, action: `击杀了 ${tgt.name}`, locationId: atk.locationId });
+  }
+  if (game.trackedPlayerId === targetId && attackerId !== targetId) {
+    game.trackRecords.push({ round: game.round, phase: game.phase, action: `被 ${atk.name} 击杀`, locationId: tgt.locationId });
+  }
+
   // 功夫反弹
   if (game.kungFuActivePlayers.includes(targetId)) {
     atk.status = 'dead';
@@ -387,6 +395,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
     case 'xiling_kill_same_room': {
       const t = game.players.find(x => x.id === targetId);
       if (!t || t.locationId !== p.locationId || t.status !== 'alive') return { ok: false, msg: '目标不在同一地点' };
+      if (t.id === p.id) return { ok: false, msg: '不能对自己使用' };
       markUsed(game, playerId, skillId);
       killPlayer(game, t.id, p.id);
       return { ok: true };
@@ -399,6 +408,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       if (game.phase !== 'vote') return { ok: false, msg: '仅投票阶段可用' };
       const t = game.players.find(x => x.id === targetId);
       if (!t || t.status !== 'alive') return { ok: false, msg: '无效目标' };
+      if (t.id === p.id) return { ok: false, msg: '不能枪毙自己' };
       markUsed(game, playerId, skillId);
       t.status = 'dead'; t.isRevealed = true;
       addEvent(game, `【枪毙】${p.name} 枪决了 ${t.name}（${t.identity === 'killer' ? '杀手' : '平民'}）`);
@@ -416,6 +426,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
     case 'baiye_track': {
       const t = game.players.find(x => x.id === targetId);
       if (!t || t.locationId !== p.locationId || t.status !== 'alive') return { ok: false, msg: '目标不在同一地点' };
+      if (t.id === p.id) return { ok: false, msg: '不能追踪自己' };
       game.trackedPlayerId = targetId;
       game.trackRecords = [];
       markUsed(game, playerId, skillId);
@@ -424,6 +435,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
     case 'tianyi_investigate_same_room': {
       const t = game.players.find(x => x.id === targetId);
       if (!t || t.locationId !== p.locationId || t.status !== 'alive') return { ok: false, msg: '目标不在同一地点' };
+      if (t.id === p.id) return { ok: false, msg: '不能查验自己' };
       markUsed(game, playerId, skillId);
       return { ok: true, reveal: { targetId: t.id, identity: t.identity } };
     }

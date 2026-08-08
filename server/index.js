@@ -19,6 +19,18 @@ const adminTokens = new Map(); // token -> expiry
 const ADMIN_PASSWORD = '柯基不爱喝茶';
 // 可用英雄池（与 gameEngine.HERO_POOL 一致）
 const HERO_SET = new Set(['xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun']);
+// 技能名映射（玛丽追踪记录用）
+const SKILL_NAMES = {
+  basic_kill: '攻击',
+  xiling_kill_same_room: '影杀',
+  niangao_kungfu: '功夫',
+  lilongxiang_gunshot: '枪毙',
+  zhangyang_cut_connection: '断路',
+  yeyu_stealth: '潜伏',
+  baiye_track: '追踪香囊',
+  tianyi_investigate_same_room: '识破',
+  zhuxun_double_move: '疾行',
+};
 let announcement = '';    // 前台公告
 
 function verifyAdmin(req) {
@@ -345,6 +357,20 @@ function getReadyCount(room) {
   return room.game.players.filter(p => p.status === 'alive' && !p.isBot && room.readySet.has(p.id)).length;
 }
 
+// 玛丽·追踪香囊：被追踪者成功使用技能/攻击时记录到 trackRecords
+function trackSkillUse(game, actorId, skillId, result) {
+  if (!game || !game.trackedPlayerId || game.trackedPlayerId !== actorId) return;
+  if (!result || !result.ok) return; // 只有成功执行的技能才记录
+  const p = game.players.find(x => x.id === actorId);
+  const name = SKILL_NAMES[skillId] || skillId;
+  game.trackRecords.push({
+    round: game.round,
+    phase: game.phase,
+    action: `使用了【${name}】`,
+    locationId: p ? p.locationId : '',
+  });
+}
+
 wss.on('connection', (ws) => {
   broadcastRoomList();
   ws.playerId = null;
@@ -606,11 +632,13 @@ wss.on('connection', (ws) => {
             break;
           }
           case 'attack': {
-            useSkill(game, myGamePlayerId, 'basic_kill', payload.targetId);
+            const result = useSkill(game, myGamePlayerId, 'basic_kill', payload.targetId);
+            trackSkillUse(game, myGamePlayerId, 'basic_kill', result);
             break;
           }
           case 'skill': {
             const result = useSkill(game, myGamePlayerId, payload.skillId, payload.targetId, payload.targetLocationId);
+            trackSkillUse(game, myGamePlayerId, payload.skillId, result);
             if (result && result.reveal) {
               // 探查结果私发
               wsSend(ws, { type: 'from_host', data: {
