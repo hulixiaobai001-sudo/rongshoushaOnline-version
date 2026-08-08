@@ -684,7 +684,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
               {/* 开始游戏 */}
               <Button onClick={handleStartGame} disabled={players.length < 4}
                 className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
-                <Play className="w-5 h-5 mr-2" />{debugMode ? '进入调试' : `开始游戏（${players.length}/4人）`}
+                <Play className="w-5 h-5 mr-2" />{debugMode ? '进入调试' : `开始游戏（${players.length + 1}/4人）`}
               </Button>
               {players.length < 4 && !debugMode && (
                 <p className="text-xs text-slate-400 text-center">至少需要4人才能开始</p>
