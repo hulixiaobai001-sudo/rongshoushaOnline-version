@@ -436,8 +436,13 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleStartGame = () => {
-    // 服务器权威：服务器创建游戏
-    netGameStart()
+    // 服务器权威：服务器创建游戏（调试模式带空壳玩家）
+    if (debugMode) {
+      const bots = Array.from({ length: 3 }, (_, i) => )
+      netGameStart(bots)
+    } else {
+      netGameStart()
+    }
     setInGame(true)
   }
 

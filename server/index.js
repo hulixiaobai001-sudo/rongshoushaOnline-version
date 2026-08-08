@@ -485,9 +485,12 @@ wss.on('connection', (ws) => {
         // 房主开始游戏
         const room = gameRooms.get(ws.roomId);
         if (!room || !ws.isHost || room.gameStarted) return;
-        // 玩家名单：房主 + 已加入玩家
+        // 玩家名单：房主 + 已加入玩家 + 调试空壳（bots）
         const names = [ws.playerName];
         room.players.forEach((p) => names.push(p.name));
+        if (Array.isArray(msg.bots)) {
+          msg.bots.forEach((b) => names.push(String(b).slice(0, 8)));
+        }
         // 房主配置（人数设置）简化：杀手数 = 房主设置的或默认
         room.game = createGame({
           hostName: ws.playerName,
