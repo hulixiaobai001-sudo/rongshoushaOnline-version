@@ -424,14 +424,16 @@ export const useGameStore = create<GameStore>()(
     loadDefaultMap: () =>
       set((state) => {
         const locs: Location[] = [
-          { id: 'loc_zhongxin', name: '中心公园', connectedTo: ['loc_yidui', 'loc_shangye', 'loc_asam'], isBlocked: false, x: 50, y: 35 },
-          { id: 'loc_yidui', name: '一大队', connectedTo: ['loc_zhongxin', 'loc_nancuiping', 'loc_jikong'], isBlocked: false, x: 75, y: 35 },
-          { id: 'loc_shangye', name: '商业街', connectedTo: ['loc_zhongxin', 'loc_asam'], isBlocked: false, x: 25, y: 30 },
-          { id: 'loc_asam', name: '阿萨姆疯人院', connectedTo: ['loc_shangye', 'loc_zhongxin'], isBlocked: false, x: 50, y: 12 },
-          { id: 'loc_nancuiping', name: '南翠屏公园', connectedTo: ['loc_lingyu', 'loc_yidui'], isBlocked: false, x: 80, y: 60 },
-          { id: 'loc_lingyu', name: '凌宇神社', connectedTo: ['loc_nancuiping', 'loc_zhicheng'], isBlocked: false, x: 60, y: 80 },
-          { id: 'loc_zhicheng', name: '志成桥', connectedTo: ['loc_lingyu', 'loc_jikong'], isBlocked: false, x: 40, y: 85 },
-          { id: 'loc_jikong', name: '疾控中心', connectedTo: ['loc_zhicheng', 'loc_yidui'], isBlocked: false, x: 30, y: 60 },
+          { id: 'loc_shuangyang', name: '双阳', connectedTo: ['loc_ganlu', 'loc_mansidun'], isBlocked: false, x: 60, y: 80 },
+          { id: 'loc_ganlu', name: '甘露之地', connectedTo: ['loc_shuangyang', 'loc_mansidun', 'loc_siji'], isBlocked: false, x: 25, y: 30 },
+          { id: 'loc_mansidun', name: '曼斯顿边境', connectedTo: ['loc_shuangyang', 'loc_ganlu', 'loc_siji'], isBlocked: false, x: 80, y: 60 },
+          { id: 'loc_siji', name: '死寂荒漠', connectedTo: ['loc_ganlu', 'loc_mansidun', 'loc_lande', 'loc_sirenwan', 'loc_xibu', 'loc_sirenzhao'], isBlocked: false, x: 50, y: 35 },
+          { id: 'loc_lande', name: '兰得群峰', connectedTo: ['loc_siji', 'loc_sirenwan'], isBlocked: false, x: 72, y: 18 },
+          { id: 'loc_sirenwan', name: '死人湾', connectedTo: ['loc_siji', 'loc_lande', 'loc_xibu'], isBlocked: false, x: 40, y: 85 },
+          { id: 'loc_xibu', name: '西部荒野', connectedTo: ['loc_siji', 'loc_sirenwan', 'loc_nanyou', 'loc_mancheng'], isBlocked: false, x: 30, y: 60 },
+          { id: 'loc_sirenzhao', name: '死人沼泽', connectedTo: ['loc_siji', 'loc_nanyou'], isBlocked: false, x: 50, y: 12 },
+          { id: 'loc_nanyou', name: '南部油田', connectedTo: ['loc_sirenzhao', 'loc_xibu', 'loc_mancheng'], isBlocked: false, x: 15, y: 45 },
+          { id: 'loc_mancheng', name: '曼城', connectedTo: ['loc_xibu', 'loc_nanyou'], isBlocked: false, x: 75, y: 35 },
         ];
         // 为每个地点绑定效果
         locs.forEach((loc) => {
@@ -568,7 +570,7 @@ export const useGameStore = create<GameStore>()(
             if (names.length > 0) state.events.push({
               id: generateId('evt'), round: state.round, phase: 'vote_result',
               timestamp: Date.now(), type: 'info',
-              description: '【凌宇神社·神视】本轮经过人员：' + names.join('、'),
+              description: '【双阳·神视】本轮经过人员：' + names.join('、'),
             });
           }
           // 屠城结算
@@ -677,7 +679,7 @@ export const useGameStore = create<GameStore>()(
             state.events.push({
               id: generateId('evt'), round: state.round, phase: state.phase,
               timestamp: Date.now(), type: 'info', locationId: player.locationId,
-              description: '【志成桥·单向】此路不通',
+              description: '【死人湾·单向】此路不通',
             });
             return;
           }
@@ -736,7 +738,7 @@ export const useGameStore = create<GameStore>()(
           state.events.push({
             id: generateId('evt'), round: state.round, phase: state.phase,
             timestamp: Date.now(), type: 'info',
-            description: `【一大队·禁武】${attackerLoc.name} 内禁止攻击！${attacker.name} 的攻击被阻止`,
+            description: `【曼城·禁武】${attackerLoc.name} 内禁止攻击！${attacker.name} 的攻击被阻止`,
           });
           return; // 攻击被阻止
         }
@@ -778,7 +780,7 @@ export const useGameStore = create<GameStore>()(
           state.events.push({
             id: generateId('evt'), round: state.round, phase: state.phase,
             timestamp: Date.now(), type: 'info',
-            description: `【疾控中心·变异】${target.name} 死而复生！身份从平民转变为杀手！`,
+            description: `【西部荒野·变异】${target.name} 死而复生！身份从平民转变为杀手！`,
           });
           checkGameEnd(state);
           return;
@@ -796,7 +798,7 @@ export const useGameStore = create<GameStore>()(
               id: generateId('evt'), round: state.round, phase: state.phase,
               timestamp: Date.now(), type: 'death',
               playerId: civ.id,
-              description: `【南翠屏公园·连锁】${civ.name}（平民）受连锁反应影响死亡`,
+              description: `【曼斯顿边境·连锁】${civ.name}（平民）受连锁反应影响死亡`,
             });
           });
         }
@@ -1181,7 +1183,7 @@ function handleDeathReport(state: GameState) {
     state.events.push({
       id: generateId('evt'), round: state.round, phase: 'death_report',
       timestamp: Date.now(), type: 'info',
-      description: `【中心公园】安全区效果：${skippedLocs.join('、')}无需封锁`,
+      description: `【死寂荒漠】安全区效果：${skippedLocs.join('、')}无需封锁`,
     });
   }
 

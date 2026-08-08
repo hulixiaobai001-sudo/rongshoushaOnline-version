@@ -11,9 +11,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'xiling',
-    name: '西凌',
-    title: '黑道老大',
-    description: '迷宫三刃之一，战力超群的杀手，和警察局有着说不清道不明的恋爱纠葛。',
+    name: '斯派洛',
+    title: '带刀好人',
+    description: '带刀好人。每局游戏限用一次。',
     color: '#7c3aed', // 紫色
     speed: 100,
     assets: {
@@ -77,9 +77,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'niangao',
-    name: '年糕',
-    title: '功夫熊猫',
-    description: '特警一大堆的厨师，武功很高的熊猫。',
+    name: '杰克.死眼',
+    title: '功夫高手',
+    description: '在行动阶段使用，给自己加持功夫状态。本行动阶段内若有同房间玩家攻击你，你无效化该伤害并将其反杀。每局游戏限用一次。',
     color: '#d97706', // 琥珀色
     speed: 0,
     assets: {
@@ -110,9 +110,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'lilongxiang',
-    name: '李龙祥',
-    title: '特警一大队队长',
-    description: '一位铁面无私的警长，坚信以暴制暴是维护正义的最后手段。当他举起狂暴蒸汽时，没有人知道他是否真的能承受审判的重量。',
+    name: '科利.清道夫',
+    title: '清道夫',
+    description: '在投票阶段，选择一名玩家令其淘汰并公布身份。若该玩家为好人（平民），则科利.清道夫也会死亡。每局游戏限用一次。',
     color: '#dc2626', // 红色
     speed: 2,
     assets: {
@@ -127,7 +127,7 @@ export const HERO_POOL: Hero[] = [
       {
         id: 'lilongxiang_gunshot',
         name: '枪毙',
-        description: '在投票阶段，选择一名玩家令其淘汰并公布身份。若该玩家为好人（平民），则李龙祥也会死亡。每局游戏限用一次。',
+        description: '在投票阶段，选择一名玩家令其淘汰并公布身份。若该玩家为好人（平民），则科利.清道夫也会死亡。每局游戏限用一次。',
         type: 'active',
         targetType: 'any_player',
         limit: 'once_per_game',
@@ -143,9 +143,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'zhuxun',
-    name: '竹隼',
-    title: '人造人杀手',
-    description: '迷宫三刃之一，人造人杀手，很爱弟弟。',
+    name: '罗宾',
+    title: '疾行者',
+    description: '在移动阶段使用，激活后本次移动阶段可连续移动两次（每次移动到相邻地点）。每轮限用一次。',
     color: '#10b981', // 翡翠绿
     speed: 10,
     assets: {
@@ -176,9 +176,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'zhangyang',
-    name: '张扬',
-    title: '特警一大队副队长',
-    description: '李龙祥家的奶牛猫，众所周知黑白配色的动物都不正常。',
+    name: '麦克.锐耳',
+    title: '切断者',
+    description: '在行动阶段，选择两个地点切断它们之间的道路。若两地无道路相连则无效果。每局游戏限用一次。',
     color: '#0891b2', // 青色
     speed: 10,
     assets: {
@@ -275,9 +275,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'yeyu',
-    name: '夜羽',
-    title: '间谍史莱姆',
-    description: '迷宫三刃之一，大馋史莱姆。',
+    name: '银行经理',
+    title: '潜伏者',
+    description: '让自己进入潜伏状态，在下个移动阶段无法行动。该效果无法跨大轮次生效。每局游戏限用一次。',
     color: '#a855f7', // 紫色（原#374151在暗色背景下不可见）
     speed: 10,
     assets: {
@@ -308,9 +308,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'baiye',
-    name: '白野',
-    title: '调香师',
-    description: '凌宇神社的调香师，天真活泼调皮可爱还有点笨笨的。',
+    name: '玛丽',
+    title: '追踪者',
+    description: '在行动阶段，标记一个同地点的玩家。获取他从本回合行动阶段之后的所有操作记录和经过的地点，直到本轮结束。每局游戏限用一次。',
     color: '#f59e0b', // 琥珀色（原#1e293b在暗色背景下不可见）
     speed: 120,
     assets: {
@@ -341,9 +341,9 @@ export const HERO_POOL: Hero[] = [
   // ═══════════════════════════════════════════
   {
     id: 'tianyi',
-    name: '天燚先生',
-    title: '市长秘书',
-    description: '一位深藏不露的智者，据说他的双眼能看穿一切伪装，只要与你同处一室，你的身份便无所遁形。',
+    name: '麟破仑.熔金',
+    title: '鉴识官',
+    description: '查验与你处在同一地点的一名玩家的身份。每局游戏限用一次。',
     color: '#06b6d4', // 青色
     speed: 10,
     assets: {

@@ -344,7 +344,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
 
       // 传送：可到达任意地点
       const isTeleport = currentPlayer.teleportReady
-      // 志成桥：允许前往 extraDestinations
+      // 死人湾：允许前往 extraDestinations
       const bridgeDests = currentLoc.effect?.type === 'bridge_jump' ? (currentLoc.effect.extraDestinations || []) : []
       const canReachViaBridge = bridgeDests.includes(targetLoc.name)
       if (!isTeleport && !canReachViaBridge && !currentLoc.connectedTo.includes(locId)) {
@@ -521,7 +521,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         if (targetPlayerId) {
           if (isHost) {
             store.killPlayer(targetPlayerId, playerId)
-            // 阿萨姆疯人院：攻击者在此攻击消耗疯人院次数（不消耗普通次数）
+            // 死人沼泽：攻击者在此攻击消耗额外次数（不消耗普通次数）
             const me = players.find((p: any) => p.id === playerId)
             const myLoc = me ? locations.find((l: any) => l.id === me.locationId) : null
             const inAsylum = myLoc?.effect?.type === 'asylum_extra_attack'
@@ -540,7 +540,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         }
         break
       // ═══════════════════════════════════════════
-      // 年糕 —— 功夫熊猫：功夫
+      // 杰克.死眼 —— 功夫
       // ═══════════════════════════════════════════
       case 'niangao_kungfu':
         activateKungFu(playerId)
@@ -548,7 +548,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 西凌 —— 黑道老大：影杀
+      // 斯派洛 —— 影杀
       // ═══════════════════════════════════════════
       case 'xiling_kill_same_room':
         if (targetPlayerId) {
@@ -570,7 +570,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 天燚先生 —— 市长秘书：识破
+      // 麟破仑.熔金 —— 识破
       // ═══════════════════════════════════════════
       case 'tianyi_investigate_same_room':
         if (targetPlayerId) {
@@ -581,7 +581,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 言浊 —— 信息科警员：过肩摔
+      // 言浊（暂未开放）
       // ═══════════════════════════════════════════
       case 'yanzhuo_suplex':
         if (targetPlayerId) {
@@ -592,7 +592,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 白野 —— 调香师：追踪香囊
+      // 玛丽 —— 追踪香囊
       // ═══════════════════════════════════════════
       case 'baiye_track':
         if (targetPlayerId) {
@@ -604,7 +604,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 夜羽 —— 间谍史莱姆：潜伏
+      // 银行经理 —— 潜伏
       // ═══════════════════════════════════════════
       case 'yeyu_stealth':
         applyHalt(playerId)
@@ -612,7 +612,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 竹隼 —— 人造人杀手：疾行
+      // 罗宾 —— 疾行
       // ═══════════════════════════════════════════
       case 'zhuxun_double_move':
         activateDoubleMove(playerId)
@@ -620,7 +620,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 冯明 —— 法医：传送
+      // 冯明（暂未开放）
       // ═══════════════════════════════════════════
       case 'fengming_teleport':
         activateTeleport(playerId)
@@ -628,7 +628,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 张扬 —— 特警副队长：断路
+      // 麦克.锐耳 —— 断路
       // ═══════════════════════════════════════════
       case 'zhangyang_cut_connection':
         setCutPair([])
@@ -638,7 +638,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 王力 —— 特警班长：大力射门
+      // 王力（暂未开放）
       // ═══════════════════════════════════════════
       case 'wangli_big_shot':
         if (targetLocationId) {
@@ -650,7 +650,7 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
         break
 
       // ═══════════════════════════════════════════
-      // 江枫 —— 黑客：侦察无人机
+      // 江枫（暂未开放）
       // ═══════════════════════════════════════════
       case 'jiangfeng_drone':
         if (currentPlayer?.locationId) {
@@ -962,7 +962,7 @@ ${skill.description}`)
         </div>
       )}
       <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200">
-        💡 地点效果提示：一大队禁武、疾控中心变异、南翠屏连锁死亡等
+        💡 地点效果提示：曼城禁武、西部荒野变异、曼斯顿边境连锁死亡等
       </div>
 
       {/* ═══ 主内容区域 ═══ */}
@@ -1182,7 +1182,7 @@ ${skill.description}`)
                   const visits = store.locationVisits?.[infoLocation.id] || []
                   const visitNames = visits.map((id: string) => players.find((p: any) => p.id === id)).filter(Boolean).map((p: any) => p.name)
                   const currentHere = players.filter((p: any) => p.locationId === infoLocation.id && p.status === 'alive').map((p: any) => p.name)
-                  info('🏛️ 凌宇神社 · 神视',
+                  info('🏛️ 双阳 · 神视',
                     '现在此地：' + (currentHere.join('、') || '无') +
                     (visitNames.length > 0 ? '\n\n本轮经过：' + visitNames.join('、') : '\n\n本轮经过：无')
                   )
@@ -1246,7 +1246,7 @@ ${skill.description}`)
                             shrine_vision: '可查看经过记录',
                             identity_transform: '平民死亡会变异为杀手',
                             no_attack: '禁止攻击',
-                            bridge_jump: '单向通行到商业街/疯人院',
+                            bridge_jump: '单向通行到甘露之地/死人沼泽',
                             mass_civilian_death: '连锁死亡',
                             placeholder: ''
                           }[infoLocation.effect.type] || ''}
@@ -1257,7 +1257,7 @@ ${skill.description}`)
                     {infoLocation.id === currentPlayer?.locationId && infoPlayers.filter(p => p.id !== currentPlayer?.id).length > 0 && (
                       <div className="flex flex-wrap items-center gap-1 mt-1">
                         {infoLocation.effect?.type === 'crowded' && currentPlayer?.identity === 'civilian' ? (
-                          <span className="text-[9px] text-slate-500">🛍️ 商业街人头攒动，看不清周围</span>
+                          <span className="text-[9px] text-slate-500">🛍️ 甘露之地人头攒动，看不清周围</span>
                         ) : (
                           <>
                         <span className="text-[9px] text-emerald-400">●</span>
@@ -1278,7 +1278,7 @@ ${skill.description}`)
                     {infoLocation.id === currentPlayer?.locationId && deadPlayers.filter(p => p.locationId === infoLocation.id).length > 0 && (
                       <div className="flex flex-wrap items-center gap-1 mt-1">
                         {infoLocation.effect?.type === 'crowded' && currentPlayer?.identity === 'civilian' ? (
-                          <span className="text-[9px] text-slate-500">🛍️ 商业街人头攒动，看不清尸体</span>
+                          <span className="text-[9px] text-slate-500">🛍️ 甘露之地人头攒动，看不清尸体</span>
                         ) : (
                           <>
                         <span className="text-[9px] text-red-400">✕</span>
@@ -1618,7 +1618,7 @@ function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, st
         })}
       </div>
 
-      {/* 枪毙技能（李龙祥） */}
+      {/* 枪毙技能（科利.清道夫） */}
       {isLiLongxiang && !gunShotUsed && (
         <div className="bg-slate-800/60 border border-red-800/50 rounded-xl p-3">
           <p className="text-xs font-bold text-red-400 mb-2">🔫 枪毙 — 选择处决目标</p>
@@ -1892,14 +1892,14 @@ function RulesPopup({ onClose }: { onClose: () => void }) {
                 <div>
                   <h4 className="text-sm font-bold text-emerald-400 mb-2">🗺️ 地点效果</h4>
                   <div className="text-xs text-slate-300 space-y-1.5">
-                    <p><span className="text-amber-400">⛑️ 阿萨姆疯人院</span> — 杀手多一次攻击</p>
-                    <p><span className="text-amber-400">🌳 中心公园</span> — 永不封锁</p>
-                    <p><span className="text-amber-400">🛍️ 商业街</span> — 平民无视野</p>
-                    <p><span className="text-amber-400">🏛️ 凌宇神社</span> — 查看经过人员</p>
-                    <p><span className="text-amber-400">🏥 疾控中心</span> — 平民死亡变杀手</p>
-                    <p><span className="text-amber-400">🌉 志成桥</span> — 单向通行</p>
-                    <p><span className="text-amber-400">🚔 一大队</span> — 禁止攻击</p>
-                    <p><span className="text-amber-400">🌲 南翠屏公园</span> — 连锁死亡</p>
+                    <p><span className="text-amber-400">⛑️ 死人沼泽</span> — 杀手多一次攻击</p>
+                    <p><span className="text-amber-400">🌳 死寂荒漠</span> — 永不封锁</p>
+                    <p><span className="text-amber-400">🛍️ 甘露之地</span> — 平民无视野</p>
+                    <p><span className="text-amber-400">🏛️ 双阳</span> — 查看经过人员</p>
+                    <p><span className="text-amber-400">🏥 西部荒野</span> — 平民死亡变杀手</p>
+                    <p><span className="text-amber-400">🌉 死人湾</span> — 单向通行</p>
+                    <p><span className="text-amber-400">🚔 曼城</span> — 禁止攻击</p>
+                    <p><span className="text-amber-400">🌲 曼斯顿边境</span> — 连锁死亡</p>
                   </div>
                 </div>
               </div>

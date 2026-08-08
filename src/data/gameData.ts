@@ -109,18 +109,14 @@ export function generateId(prefix: string): string {
 
 /** 英雄池1.1 - 可用的英雄ID列表 */
 export const HERO_POOL_V1_1_IDS = [
-  'xiling',        // 西凌
-  'niangao',       // 年糕
-  'lilongxiang',   // 李龙祥
-  'zhangyang',     // 张扬
-  'fengming',      // 冯明
-  'wangli',        // 王力
-  'yeyu',          // 夜羽
-  'yanzhuo',       // 言浊
-  'tianyi',        // 天燚先生
-  'baiye',         // 白野
-  'zhuxun',        // 竹隼
-  'jiangfeng',     // 江枫
+  'xiling',        // 斯派洛（带刀好人）
+  'niangao',       // 杰克.死眼（功夫）
+  'lilongxiang',   // 科利.清道夫（枪毙）
+  'zhangyang',     // 麦克.锐耳（断路）
+  'yeyu',          // 银行经理（潜伏）
+  'baiye',         // 玛丽（追踪香囊）
+  'tianyi',        // 麟破仑.熔金（识破）
+  'zhuxun',        // 罗宾（疾行）
 ];
 
 // ============================================
@@ -129,43 +125,43 @@ export const HERO_POOL_V1_1_IDS = [
 
 /** 地点效果预设 - 按地点名称匹配 */
 export const LOCATION_EFFECTS: Record<string, LocationEffect> = {
-  '阿萨姆疯人院': {
+  '死人沼泽': {
     type: 'asylum_extra_attack',
     name: '多刀',
     description: '杀手在此地点攻击不消耗常规攻击次数（额外获得一次攻击机会）',
   },
-  '中心公园': {
+  '死寂荒漠': {
     type: 'unblockable',
     name: '不会封锁',
-    description: '中心公园永远不会被封锁',
+    description: '死寂荒漠永远不会被封锁',
   },
-  '商业街': {
+  '甘露之地': {
     type: 'crowded',
     name: '平民无视野',
-    description: '平民无法看到周围的人和尸体，探查时显示"商业街人头攒动"',
+    description: '平民无法看到周围的人和尸体，探查时显示"甘露之地人头攒动"',
   },
-  '一大队': {
+  '曼城': {
     type: 'no_attack',
     name: '禁武',
     description: '该地点内任何攻击技能无法使用',
   },
-  '南翠屏公园': {
+  '曼斯顿边境': {
     type: 'mass_civilian_death',
     name: '连锁反应',
     description: '当有玩家在此处死亡，该房间内所有平民同时死亡（无伤害来源）',
   },
-  '凌宇神社': {
+  '双阳': {
     type: 'shrine_vision',
     name: '神视',
     description: '行动阶段3结束后，处于此房间且速度最高的人可选择一个地点，查看本轮所有经过该地点的人员名单',
   },
-  '志成桥': {
+  '死人湾': {
     type: 'bridge_jump',
-    name: '地铁站',
-    description: '位于此处可以移动到商业街和阿萨姆疯人院（从商业街和阿萨姆疯人院无法直接到达志成桥）',
-    extraDestinations: ['商业街', '阿萨姆疯人院'],
+    name: '单向通行',
+    description: '位于此处可以移动到甘露之地和死人沼泽（从甘露之地和死人沼泽无法直接到达死人湾）',
+    extraDestinations: ['甘露之地', '死人沼泽'],
   },
-  '疾控中心': {
+  '西部荒野': {
     type: 'identity_transform',
     name: '变异',
     description: '在此处死亡的平民身份会转变为杀手',
@@ -195,14 +191,16 @@ export function getEffectDisplayName(effect?: LocationEffect): string {
 
 /** 地点名称随机池 */
 export const LOCATION_NAME_POOL = [
-  '南翠屏公园',
-  '中心公园',
-  '阿萨姆疯人院',
-  '凌宇神社',
-  '疾控中心',
-  '志成桥',
-  '一大队',
-  '商业街',
+  '双阳',
+  '甘露之地',
+  '曼斯顿边境',
+  '死寂荒漠',
+  '兰得群峰',
+  '死人湾',
+  '西部荒野',
+  '死人沼泽',
+  '南部油田',
+  '曼城',
 ];
 
 /** 随机打乱数组（Fisher-Yates） */

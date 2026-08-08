@@ -131,19 +131,20 @@ function RoleAssignmentPanel() {
                     <select value={curHero} onChange={(e) => setPlayerHero(p.id, e.target.value)}
                       className="flex-1 text-[9px] bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-slate-300 min-w-0">
                       <option value="">随机英雄</option>
-                      <option value="xiling">西凌</option>
-                      <option value="kexiong">科雄</option>
-                      <option value="niangao">年糕</option>
-                      <option value="lilongxiang">李龙祥</option>
-                      <option value="zhuxun">竹隼</option>
-                      <option value="zhangyang">张扬</option>
-                      <option value="fengming">冯明</option>
-                      <option value="wangli">王力</option>
-                      <option value="yeyu">夜羽</option>
-                      <option value="baiye">白野</option>
-                      <option value="tianyi">天燚</option>
-                    <option value="yanzhuo">言浊</option>
-                      <option value="jiangfeng">江枫</option>
+                      <option value="xiling">斯派洛</option>
+                      <option value="niangao">杰克.死眼</option>
+                      <option value="lilongxiang">科利.清道夫</option>
+                      <option value="zhangyang">麦克.锐耳</option>
+                      <option value="yeyu">银行经理</option>
+                      <option value="baiye">玛丽</option>
+                      <option value="tianyi">麟破仑.熔金</option>
+                      <option value="zhuxun">罗宾</option>
+                      <option disabled className="text-slate-600">—— 暂未开放 ——</option>
+                      <option value="kexiong" disabled>科雄（暂未开放）</option>
+                      <option value="fengming" disabled>冯明（暂未开放）</option>
+                      <option value="wangli" disabled>王力（暂未开放）</option>
+                      <option value="yanzhuo" disabled>言浊（暂未开放）</option>
+                      <option value="jiangfeng" disabled>江枫（暂未开放）</option>
                     </select>
                     <button onClick={() => removePlayer(p.id)}
                       className="text-slate-500 hover:text-red-400 text-xs shrink-0 w-4">✕</button>
