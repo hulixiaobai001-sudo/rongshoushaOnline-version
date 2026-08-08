@@ -452,7 +452,11 @@ wss.on('connection', (ws) => {
         if (d && d.type === 'request_state') {
           const gpId = ws.isHost ? room.game?.players[0].id
             : (room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null);
-          if (room.game) wsSend(ws, { type: 'from_host', data: { type: 'sync', state: serializeGame(room.game, gpId) } });
+          if (room.game) {
+            const st = serializeGame(room.game, gpId);
+            st.readyCount = room.readySet.size;
+            wsSend(ws, { type: 'from_host', data: { type: 'sync', state: st } });
+          }
         }
         break;
       }
@@ -591,10 +595,14 @@ wss.on('connection', (ws) => {
         }
 
         // 广播状态（每个玩家看到自己身份）
-        wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state: serializeGame(game, game.players[0].id) } });
+        const hostSt = serializeGame(game, game.players[0].id);
+        hostSt.readyCount = room.readySet.size;
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state: hostSt } });
         room.players.forEach((p, serverId) => {
           const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
-          wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: serializeGame(game, gpId) } });
+          const st = serializeGame(game, gpId);
+          st.readyCount = room.readySet.size;
+          wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: st } });
         });
         break;
       }

@@ -85,6 +85,7 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   const [hasMoved, setHasMoved] = useState(false)
   const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set())
   const [myReady, setMyReady] = useState(false)
+  const [readyCount, setReadyCount] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
@@ -141,6 +142,8 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
         if (Array.isArray(msg.state.players) && msg.state.players.length > 0) {
           store.applyRemoteState(msg.state)
           setLoading(false)
+          // 就绪数同步
+          if (typeof msg.state.readyCount === 'number') setReadyCount(msg.state.readyCount)
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
           if (!store.myPlayerId && !isSpectator) {
             const me = msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
@@ -1116,7 +1119,7 @@ ${skill.description}`)
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
                 myReady ? 'bg-emerald-700 text-emerald-200' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
               }`}>
-              {myReady ? <span>✅ 已就绪 {readyPlayers.size}/{alivePlayers.length}</span> : <><Check className="w-3.5 h-3.5" />准备</>}
+              {myReady ? <span>✅ 已就绪 {readyCount}/{alivePlayers.length}</span> : <><Check className="w-3.5 h-3.5" />准备（{readyCount}/{alivePlayers.length}）</>}
             </button>
           )}
 
