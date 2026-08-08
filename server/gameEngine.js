@@ -435,7 +435,7 @@ function addEvent(game, text) {
   if (game.events.length > 50) game.events.shift();
 }
 
-module.exports = {
+export {
   createGame, serializeGame, nextPhase, movePlayer, attackPlayer,
   useSkill, submitVotes, checkEnd, killPlayer, PHASE_NAMES,
 };
