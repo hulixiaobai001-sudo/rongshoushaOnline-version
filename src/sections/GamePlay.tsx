@@ -332,7 +332,7 @@ function PlayerActionCard({
   const getSkillUsedCount = (skill: HeroSkill): number => {
     // once_per_round 技能从 store 的 roundSkillUsage 读取（每轮重置，不受组件卸载影响）
     if (skill.limit === 'once_per_round') {
-      return roundSkillUsage[skill.id] || 0;
+      return roundSkillUsage?.[player?.id]?.[skill.id] || 0;
     }
     // once_per_game 技能从组件 state 读取
     return skillUsage[skill.id] || 0;
@@ -357,7 +357,7 @@ function PlayerActionCard({
   const executeSkill = (skill: HeroSkill, target: Player) => {
     // 标记技能已使用：once_per_round 技能存入 store（每轮重置），once_per_game 技能存入组件 state
     if (skill.limit === 'once_per_round') {
-      incrementRoundSkillUsage(skill.id);
+      incrementRoundSkillUsage(player.id, skill.id);
     } else {
       setSkillUsage((prev) => ({ ...prev, [skill.id]: (prev[skill.id] || 0) + 1 }));
     }

@@ -384,7 +384,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
     }
     // once_per_round 技能每轮限一次
     if (skill.limit === 'once_per_round') {
-      const usedThisRound = (roundSkillUsage && roundSkillUsage[skill.id]) || 0
+      const usedThisRound = (roundSkillUsage?.[currentPlayer?.id || '']?.[skill.id]) || 0
       if (usedThisRound >= skill.maxUses) {
         info('已使用', `【${skill.name}】每轮仅能使用${skill.maxUses}次`)
         return
@@ -447,7 +447,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
       store.markSkillUsed(playerId, skill.id)
     }
     if (skill.limit === 'once_per_round') {
-      store.incrementRoundSkillUsage(skill.id)
+      store.incrementRoundSkillUsage(playerId, skill.id)
     }
 
     // 执行技能效果
@@ -476,7 +476,8 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
         if (targetPlayerId) {
           store.killPlayer(targetPlayerId, playerId)
           const target = players.find(p => p.id === targetPlayerId)
-          info('🗡️ 影杀成功', `${target?.name} 已死亡。身份：${target?.identity === 'killer' ? '🔴 杀手' : '🔵 平民'}`)
+          // 不显示身份：本地乐观更新时目标身份不可靠（服务器结算后以事件播报为准）
+          info('🗡️ 影杀已发出', `${target?.name || '目标'} 已被击杀（以服务器结算为准）`)
         }
         break
 
@@ -648,7 +649,7 @@ ${skill.description}`)
     const phaseOk = s.usablePhase.some(p => phase.startsWith(p) || (p === 'vote' && phase === 'vote') || p === phase)
     // 检查次数
     const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
-    const roundUsed = s.limit === 'once_per_round' && roundSkillUsage[s.id] && roundSkillUsage[s.id] >= 1
+    const roundUsed = s.limit === 'once_per_round' && roundSkillUsage?.[currentPlayer?.id || '']?.[s.id] >= 1
     const notUsed = s.limit === 'unlimited' || (!roundUsed && (s.limit === 'once_per_round' || !usedSkillIds.includes(s.id)))
     return phaseOk && notUsed
   }) : []
@@ -1092,7 +1093,7 @@ ${skill.description}`)
           <p className="text-[10px] text-purple-400 font-medium mb-1">{isDead ? '💀 你已死亡 - 观战视角' : '👁️ 观战模式 - 全图视角'}</p>
           <div className="max-h-[80px] overflow-auto space-y-0.5">
             {store.events.slice(-10).map((e: any, i: number) => (
-              <p key={i} className="text-[9px] text-slate-500">{e.description}</p>
+              <p key={i} className="text-[9px] text-slate-500">{e.description || e.text}</p>
             ))}
           </div>
         </div>
@@ -1204,13 +1205,9 @@ ${skill.description}`)
         onExit={onLeave}
         onRename={(name: string) => {
           if (!currentPlayer) return
-          if (isHost) {
-            store.updatePlayerName(currentPlayer.id, name)
-      
-          } else {
-            netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
-            store.updatePlayerName(currentPlayer.id, name)
-          }
+          // 联机改名走服务器（服务器权威：同步游戏内角色名 + 房间名单，广播所有人）
+          netToHost({ type: 'action', action: 'rename', data: { playerId: currentPlayer.id, name } })
+          store.updatePlayerName(currentPlayer.id, name)
         }} />}
     </div>
   )

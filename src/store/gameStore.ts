@@ -132,11 +132,11 @@ interface GameStore extends GameState {
 
   
   // 每轮重置技能使用计数（once_per_round 技能）
-  incrementRoundSkillUsage: (skillId: string) => void;
+  incrementRoundSkillUsage: (playerId: string, skillId: string) => void;
   markSkillUsed: (playerId: string, skillId: string) => void;
   setDroneState: (playerId: string, locationId: string, roundNum: number) => void;
   setDrone: (playerId: string, locationId: string) => void;
-  decrementRoundSkillUsage: (skillId: string) => void;
+  decrementRoundSkillUsage: (playerId: string, skillId: string) => void;
   
 
   // 杀手攻击次数消耗
@@ -219,9 +219,11 @@ export const useGameStore = create<GameStore>()(
         if (Array.isArray(remote.pendingAttacks)) state.pendingAttacks = remote.pendingAttacks;
         if (Array.isArray(remote.events)) state.events = remote.events;
         if (remote.usedSkills) state.usedSkills = remote.usedSkills;
+        if (remote.roundSkillUsage) state.roundSkillUsage = remote.roundSkillUsage;
         if (remote.locationVisits) state.locationVisits = remote.locationVisits;
         if (remote.droneLocationId !== undefined) state.droneLocationId = remote.droneLocationId;
         if (remote.dronePlayerId !== undefined) state.dronePlayerId = remote.dronePlayerId;
+        if (typeof remote.droneRound === 'number') state.droneRound = remote.droneRound;
         if (remote.trackedPlayerId !== undefined) state.trackedPlayerId = remote.trackedPlayerId;
         if (Array.isArray(remote.trackRecords)) state.trackRecords = remote.trackRecords;
       }),
@@ -393,14 +395,17 @@ export const useGameStore = create<GameStore>()(
         if (!state.usedSkills[playerId].includes(skillId)) state.usedSkills[playerId].push(skillId);
       }),
 
-    incrementRoundSkillUsage: (skillId) =>
+    incrementRoundSkillUsage: (playerId, skillId) =>
       set((state) => {
-        state.roundSkillUsage[skillId] = (state.roundSkillUsage[skillId] || 0) + 1;
+        if (!state.roundSkillUsage[playerId]) state.roundSkillUsage[playerId] = {};
+        state.roundSkillUsage[playerId][skillId] = (state.roundSkillUsage[playerId][skillId] || 0) + 1;
       }),
 
-    decrementRoundSkillUsage: (skillId) =>
+    decrementRoundSkillUsage: (playerId, skillId) =>
       set((state) => {
-        state.roundSkillUsage[skillId] = Math.max(0, (state.roundSkillUsage[skillId] || 0) - 1);
+        if (state.roundSkillUsage[playerId]) {
+          state.roundSkillUsage[playerId][skillId] = Math.max(0, (state.roundSkillUsage[playerId][skillId] || 0) - 1);
+        }
       }),
 
     // 杀手攻击次数消耗：在阿萨姆疯人院消耗 asylumAttackRemaining，否则消耗 normalAttackRemaining

@@ -408,6 +408,10 @@ wss.on('connection', (ws) => {
           wsSend(ws, { type: 'error', message: '房间不存在' });
           return;
         }
+        if (room.gameStarted) {
+          wsSend(ws, { type: 'error', message: '游戏已开始，无法加入' });
+          return;
+        }
         if (room.players.size + 1 >= room.maxPlayers) {
           wsSend(ws, { type: 'error', message: '房间已满' });
           return;
@@ -436,9 +440,8 @@ wss.on('connection', (ws) => {
         const room = gameRooms.get(ws.roomId);
         if (!room) return;
         if (ws.isHost) {
-          // 房主离开 → 解散房间
+          // 房主离开 → 解散房间（先取注册表记录再删除，recordHistory 才会生效）
           room.players.forEach((p) => wsSend(p.ws, { type: 'room_closed', message: '房主已离开' }));
-          rooms.delete(room.roomId);
           const rm = rooms.get(room.roomId);
           if (rm) { recordHistory(rm); rooms.delete(room.roomId); }
           gameRooms.delete(room.roomId);
@@ -453,7 +456,7 @@ wss.on('connection', (ws) => {
 
       // ===== 消息路由 =====
       case 'to_host': {
-        // 玩家 → 服务器（request_state 请求状态）
+        // 玩家 → 服务器（request_state 请求状态 / rename 改名）
         const room = gameRooms.get(ws.roomId);
         if (!room) break;
         const d = msg.data;
@@ -464,6 +467,37 @@ wss.on('connection', (ws) => {
             const st = serializeGame(room.game, gpId);
             st.readyCount = getReadyCount(room);
             wsSend(ws, { type: 'from_host', data: { type: 'sync', state: st } });
+          }
+        } else if (d && d.type === 'action' && d.action === 'rename') {
+          // 改名：同步游戏内角色名 + 房间名单（房主/玩家通用），广播给所有人
+          const newName = String(d.name || '').trim().slice(0, 8);
+          if (!newName) break;
+          if (room.game) {
+            const gpId = ws.isHost ? room.game.players[0].id
+              : (room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null);
+            const gp = room.game.players.find(p => p.id === gpId);
+            if (gp) gp.name = newName;
+          }
+          if (ws.isHost) {
+            room.hostName = newName;
+            ws.playerName = newName;
+            const reg = rooms.get(room.roomId);
+            if (reg) { reg.hostName = newName; reg.updatedAt = Date.now(); }
+          } else if (ws.playerId) {
+            const p = room.players.get(ws.playerId);
+            if (p) { p.name = newName; ws.playerName = newName; }
+          }
+          // 广播最新状态
+          if (room.game) {
+            const hostSt = serializeGame(room.game, room.game.players[0].id);
+            hostSt.readyCount = getReadyCount(room);
+            wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state: hostSt } });
+            room.players.forEach((p, serverId) => {
+              const gpId2 = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
+              const st2 = serializeGame(room.game, gpId2);
+              st2.readyCount = getReadyCount(room);
+              wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: st2 } });
+            });
           }
         }
         break;
@@ -493,9 +527,11 @@ wss.on('connection', (ws) => {
         // 房主开始游戏
         const room = gameRooms.get(ws.roomId);
         if (!room || !ws.isHost || room.gameStarted) return;
-        // 玩家名单：房主 + 已加入玩家 + 调试空壳（bots）
+        // 玩家名单：房主 + 已加入的真人玩家 + 调试空壳（bots）
+        // 观战者不参与游戏（不进名单/不映射/不发身份）
+        const realEntries = [...room.players.entries()].filter(([, p]) => !p.isSpectator);
         const names = [ws.playerName];
-        room.players.forEach((p) => names.push(p.name));
+        realEntries.forEach(([, p]) => names.push(p.name));
         const bots = Array.isArray(msg.bots) ? msg.bots.map(b => String(b).slice(0, 8)) : [];
         bots.forEach((b) => names.push(b));
         // 房主配置（人数设置）简化：杀手数 = 房主设置的或默认
@@ -516,19 +552,19 @@ wss.on('connection', (ws) => {
         }
         // 空壳玩家自动就绪：它们不是真人、不需要操作，但绝不能阻塞游戏推进
         room.game.players.forEach(gp => { if (gp.isBot) room.readySet.add(gp.id); });
-        // 建立 serverId ↔ gamePlayerId 映射（房主=players[0]）
+        // 建立 serverId ↔ gamePlayerId 映射（房主=players[0]，随后依次是真人玩家）
         room.gamePlayerMap = new Map();
         room.gamePlayerMap.set(ws.playerId, room.game.players[0].id);
         let gi = 1;
-        room.players.forEach((p, serverId) => {
+        realEntries.forEach(([serverId]) => {
           if (room.game.players[gi]) room.gamePlayerMap.set(serverId, room.game.players[gi].id);
           gi++;
         });
         room.gameStarted = true;
-        // 私发身份给每个玩家
+        // 私发身份给每个真人玩家
         room.game.players.forEach((gp, i) => {
           if (i === 0) return; // 房主自己知道（room.hostWs）
-          const serverId = [...room.players.keys()][i - 1];
+          const serverId = realEntries[i - 1]?.[0];
           if (serverId) {
             wsSend(room.players.get(serverId).ws, {
               type: 'from_host', data: { type: 'your_role', playerId: gp.id, identity: gp.identity, heroId: gp.heroId },
@@ -565,7 +601,8 @@ wss.on('connection', (ws) => {
 
         switch (action) {
           case 'move': {
-            movePlayer(game, payload.playerId || myGamePlayerId, payload.locationId);
+            // 只用服务器映射的玩家身份，忽略客户端传的 playerId（防越权移动别人的角色）
+            movePlayer(game, myGamePlayerId, payload.locationId);
             break;
           }
           case 'attack': {
@@ -692,6 +729,9 @@ wss.on('connection', (ws) => {
     if (room) {
       if (ws.isHost) {
         room.players.forEach((p) => wsSend(p.ws, { type: 'room_closed', message: '房主已断开连接' }));
+        // 同步清理公开注册表（否则大厅残留死房间，别人加入报"房间不存在"）
+        const rm = rooms.get(room.roomId);
+        if (rm) { recordHistory(rm); rooms.delete(room.roomId); }
         gameRooms.delete(room.roomId);
       } else if (ws.playerId) {
         room.players.delete(ws.playerId);

@@ -122,8 +122,8 @@ function serializeGame(game, viewerId) {
       isRevealed: p.isRevealed, votedFor: p.votedFor,
       isBot: !!p.isBot, // 空壳标记：前端据此区分真假玩家
       normalAttackRemaining: p.normalAttackRemaining, asylumAttackRemaining: p.asylumAttackRemaining,
-      // 身份：只给本人或已暴露（死亡/枪毙）
-      identity: (p.id === viewerId || p.isRevealed) ? p.identity : undefined,
+      // 身份：只给本人或已暴露（死亡/枪毙）；对局结束后（end/winner）全体公开用于结算展示
+      identity: (p.id === viewerId || p.isRevealed || game.phase === 'end' || game.winner) ? p.identity : undefined,
     })),
     locations: game.locations.map(l => ({ ...l })),
     blockedLocations: game.blockedLocations,
@@ -136,7 +136,10 @@ function serializeGame(game, viewerId) {
     trackedPlayerId: game.trackedPlayerId,
     trackRecords: game.trackRecords,
     droneLocationId: game.droneLocationId,
-    events: game.events.slice(-20),
+    dronePlayerId: game.dronePlayerId,
+    droneRound: game.droneRound,
+    // 事件：补 description 字段（前端事件日志用 description 渲染）
+    events: game.events.slice(-20).map(e => ({ ...e, description: e.text })),
   };
 }
 
@@ -190,6 +193,8 @@ function nextPhase(game) {
 function movePlayer(game, playerId, locationId) {
   const p = game.players.find(x => x.id === playerId);
   if (!p || p.status !== 'alive') return { ok: false, msg: '无效玩家' };
+  // 服务器权威：只有移动阶段可以移动（前端按钮已限制，这里防越权/误发）
+  if (!game.phase.startsWith('move')) return { ok: false, msg: '当前阶段无法移动' };
   if (p.halted && game.phase.startsWith('move')) return { ok: false, msg: '你处于停步状态' };
   const to = game.locations.find(l => l.id === locationId);
   const from = game.locations.find(l => l.id === p.locationId);
@@ -234,6 +239,8 @@ function attackPlayer(game, attackerId, targetId) {
   const tgt = game.players.find(x => x.id === targetId);
   if (!atk || !tgt || atk.status !== 'alive' || tgt.status !== 'alive') return { ok: false, msg: '无效目标' };
   if (atk.identity !== 'killer') return { ok: false, msg: '仅杀手可攻击' };
+  // 服务器权威：只有行动阶段可以攻击
+  if (!game.phase.startsWith('action')) return { ok: false, msg: '仅行动阶段可攻击' };
   if (atk.locationId !== tgt.locationId) return { ok: false, msg: '目标不在同一地点' };
 
   const atkLoc = game.locations.find(l => l.id === atk.locationId);
@@ -323,15 +330,55 @@ function checkEnd(game) {
   return false;
 }
 
+// 技能可用的阶段前缀（与前端 heroData.ts 的 usablePhase 对齐；服务器权威校验）
+const SKILL_PHASES = {
+  xiling_kill_same_room: 'action',
+  niangao_kungfu: 'action',
+  lilongxiang_gunshot: 'vote',
+  zhangyang_cut_connection: 'action',
+  yeyu_stealth: 'action',
+  baiye_track: 'action',
+  tianyi_investigate_same_room: 'action',
+  zhuxun_double_move: 'move',
+};
+
+// 技能使用限制（once_per_game 进 usedSkills；once_per_round 进 roundSkillUsage，每轮重置）
+const SKILL_LIMITS = {
+  xiling_kill_same_room: 'once_per_game',
+  niangao_kungfu: 'once_per_game',
+  lilongxiang_gunshot: 'once_per_game',
+  zhangyang_cut_connection: 'once_per_game',
+  yeyu_stealth: 'once_per_game',
+  baiye_track: 'once_per_game',
+  tianyi_investigate_same_room: 'once_per_game',
+  zhuxun_double_move: 'once_per_round',
+};
+
 // ---------- 技能 ----------
 function useSkill(game, playerId, skillId, targetId, targetLocationId) {
   const p = game.players.find(x => x.id === playerId);
   if (!p || p.status !== 'alive') return { ok: false, msg: '无效玩家' };
 
-  // 次数
+  // 阶段校验（basic_kill 走 attackPlayer 自己的检查）
+  if (skillId !== 'basic_kill') {
+    const reqPhase = SKILL_PHASES[skillId];
+    if (reqPhase === 'vote') {
+      if (game.phase !== 'vote') return { ok: false, msg: '仅投票阶段可用' };
+    } else if (reqPhase === 'action') {
+      if (!game.phase.startsWith('action')) return { ok: false, msg: '仅行动阶段可用' };
+    } else if (reqPhase === 'move') {
+      if (!game.phase.startsWith('move')) return { ok: false, msg: '仅移动阶段可用' };
+    }
+  }
+
+  // 次数（basic_kill 不限制）
   if (skillId !== 'basic_kill') {
     const used = game.usedSkills[playerId] || [];
     if (used.includes(skillId)) return { ok: false, msg: '该技能本局已使用' };
+    if (SKILL_LIMITS[skillId] === 'once_per_round') {
+      const roundUsed = (game.roundSkillUsage[playerId] || {})[skillId] || 0;
+      if (roundUsed >= 1) return { ok: false, msg: '该技能本轮已使用' };
+    }
   }
 
   switch (skillId) {
@@ -402,14 +449,23 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
 }
 
 function markUsed(game, playerId, skillId) {
-  if (!game.usedSkills[playerId]) game.usedSkills[playerId] = [];
-  game.usedSkills[playerId].push(skillId);
+  if (SKILL_LIMITS[skillId] === 'once_per_round') {
+    // 每轮一次：per-player 记录，vote_result 阶段整表清空
+    if (!game.roundSkillUsage[playerId]) game.roundSkillUsage[playerId] = {};
+    game.roundSkillUsage[playerId][skillId] = (game.roundSkillUsage[playerId][skillId] || 0) + 1;
+  } else {
+    if (!game.usedSkills[playerId]) game.usedSkills[playerId] = [];
+    game.usedSkills[playerId].push(skillId);
+  }
 }
 
 // ---------- 投票 ----------
 function submitVotes(game, votes) {
   game.players.forEach(p => { p.votedFor = null; p.voteCount = 0; });
+  const seen = new Set(); // 去重：同一玩家只算一票（防重复提交刷票）
   votes.forEach(v => {
+    if (seen.has(v.voterId)) return;
+    seen.add(v.voterId);
     const voter = game.players.find(p => p.id === v.voterId);
     const target = game.players.find(p => p.id === v.targetId);
     if (voter && target && voter.status === 'alive' && target.status === 'alive') {
