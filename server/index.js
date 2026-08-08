@@ -529,9 +529,8 @@ wss.on('connection', (ws) => {
       case 'game_action': {
         const room = gameRooms.get(ws.roomId);
         if (!room || !room.game) return;
-        const d = msg.data || {};
-        const action = d.action;
-        const payload = d.data || {};
+        const action = msg.action;   // 顶层action（netSendGameAction格式）
+        const payload = msg.data || {};
         const game = room.game;
 
         // 玩家身份：用映射
