@@ -90,7 +90,7 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
-  useEffect(() => { setHasMoved(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
+  useEffect(() => { setHasMoved(false); setMyReady(false) }, [phase])
   // 攻击次数按轮刷新（投票结束后重置，阶段变化不重置）
   useEffect(() => { setHasAttacked(false) }, [round])
 
