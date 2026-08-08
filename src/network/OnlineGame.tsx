@@ -1427,7 +1427,7 @@ function VoteResultSection({ players, alivePlayers, onNextPhase }: {
             return (
               <div key={p.id} className="flex items-center justify-between text-[10px] text-slate-400">
                 <span className="text-white">{p.name}</span>
-                <span>{target ?  : '弃票'}</span>
+                <span>{target ? `→ ${target.name}` : '弃票'}</span>
               </div>
             )
           })}
