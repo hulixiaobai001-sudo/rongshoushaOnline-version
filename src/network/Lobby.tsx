@@ -191,7 +191,6 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [showWarning, setShowWarning] = useState(true)
   const [isSpectator, setIsSpectator] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
-  const [debugInput, setDebugInput] = useState('')
   const [inGame, setInGame] = useState(false)
   const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
   const connectingRef = useRef(false)
@@ -285,6 +284,23 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     })
     return () => { netDisconnect() }
   }, [])
+
+  // 调试模式隐藏入口：连点5次
+  const debugTapRef = useRef(0)
+  const handleDebugTap = () => {
+    debugTapRef.current++
+    setTimeout(() => { debugTapRef.current = 0 }, 2000)
+    if (debugTapRef.current >= 5) {
+      debugTapRef.current = 0
+      const pwd = prompt('请输入调试口令：')
+      if (pwd === DEBUG_PHRASE) {
+        setDebugMode(true)
+        setStatus('调试模式已解锁')
+      } else if (pwd) {
+        alert('口令错误')
+      }
+    }
+  }
 
   const handleCreateRoom = async (customCode?: string) => {
     if (connectingRef.current) return
@@ -450,7 +466,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
             <div className="w-16 h-16 rounded-full bg-amber-900/50 border-2 border-amber-500 flex items-center justify-center mx-auto">
               <span className="text-3xl">⚠️</span>
             </div>
-            <h2 className="text-lg font-bold text-white">联机模式</h2>
+            <h2 className="text-lg font-bold text-white cursor-pointer select-none" onClick={handleDebugTap}>联机模式</h2>
             <p className="text-sm text-slate-300">
               截止目前，联机功能尚未开发完成，可能会出现各种 bug。
             </p>
@@ -575,20 +591,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                 </Button>
               </div>
 
-              {/* 调试模式开关 - 口令 */}
-              {!debugMode ? (
-                <div className="pt-2">
-                  <Input placeholder="输入调试口令..." value={debugInput}
-                    onChange={(e) => {
-                      setDebugInput(e.target.value)
-                      if (e.target.value === DEBUG_PHRASE) {
-                        setDebugMode(true)
-                        setStatus('调试模式已解锁')
-                      }
-                    }}
-                    className="text-xs bg-transparent border-0 text-slate-600 placeholder:text-slate-700 h-6 px-0" />
-                </div>
-              ) : (
+              {/* 调试模式状态（入口隐藏：连点标题触发） */}
+              {debugMode && (
                 <p className="text-[10px] text-amber-600/50 text-center">调试模式已激活</p>
               )}
             </>
@@ -668,8 +672,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                 </CardContent>
               </Card>
 
-              {/* 房主设置（合并面板） */}
-              {mode === 'host' && (
+              {/* 房主设置（合并面板，仅调试模式显示） */}
+              {mode === 'host' && debugMode && (
                 <RoleAssignmentPanel />
               )}
 
