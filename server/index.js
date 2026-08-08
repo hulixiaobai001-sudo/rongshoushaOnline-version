@@ -1,4 +1,5 @@
 import { WebSocketServer } from 'ws';
+import { createGame, serializeGame, nextPhase, movePlayer, useSkill, submitVotes } from './gameEngine.js';
 import { createServer } from 'http';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
@@ -368,6 +369,10 @@ wss.on('connection', (ws) => {
           players: new Map(),
           maxPlayers: Number(msg.maxPlayers) || 8,
           hasPassword: !!msg.hasPassword,
+          game: null,          // 游戏状态（服务器权威）
+          readySet: new Set(), // 已准备玩家
+          votes: [],           // 投票收集
+          gameStarted: false,
         });
         // 同步到公开房间注册表
         if (!rooms.has(roomId)) {
@@ -464,6 +469,121 @@ wss.on('connection', (ws) => {
           const target = room.players.get(msg.peerId);
           if (target) wsSend(target.ws, { type: 'from_host', data: msg.data });
         }
+        break;
+      }
+
+      // ===== 游戏（服务器权威） =====
+      case 'game_start': {
+        // 房主开始游戏
+        const room = gameRooms.get(ws.roomId);
+        if (!room || !ws.isHost || room.gameStarted) return;
+        // 玩家名单：房主 + 已加入玩家
+        const names = [ws.playerName];
+        room.players.forEach((p) => names.push(p.name));
+        // 房主配置（人数设置）简化：杀手数 = 房主设置的或默认
+        room.game = createGame({
+          hostName: ws.playerName,
+          players: names,
+          killerCount: 0, // 默认动态
+        });
+        // 建立 serverId ↔ gamePlayerId 映射（房主=players[0]）
+        room.gamePlayerMap = new Map();
+        room.gamePlayerMap.set(ws.playerId, room.game.players[0].id);
+        let gi = 1;
+        room.players.forEach((p, serverId) => {
+          if (room.game.players[gi]) room.gamePlayerMap.set(serverId, room.game.players[gi].id);
+          gi++;
+        });
+        room.gameStarted = true;
+        // 私发身份给每个玩家
+        room.game.players.forEach((gp, i) => {
+          if (i === 0) return; // 房主自己知道（room.hostWs）
+          const serverId = [...room.players.keys()][i - 1];
+          if (serverId) {
+            wsSend(room.players.get(serverId).ws, {
+              type: 'from_host', data: { type: 'your_role', playerId: gp.id, identity: gp.identity, heroId: gp.heroId },
+            });
+          }
+        });
+        // 广播初始状态
+        const initState = serializeGame(room.game, null);
+        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: initState } }));
+        wsSend(room.hostWs, { type: 'game_started' });
+        break;
+      }
+
+      case 'game_action': {
+        const room = gameRooms.get(ws.roomId);
+        if (!room || !room.game) return;
+        const d = msg.data || {};
+        const action = d.action;
+        const payload = d.data || {};
+        const game = room.game;
+
+        // 玩家身份：用映射
+        const myGamePlayerId = room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null;
+        if (!myGamePlayerId) return;
+
+        switch (action) {
+          case 'move': {
+            movePlayer(game, payload.playerId || myGamePlayerId, payload.locationId);
+            break;
+          }
+          case 'attack': {
+            useSkill(game, myGamePlayerId, 'basic_kill', payload.targetId);
+            break;
+          }
+          case 'skill': {
+            const result = useSkill(game, myGamePlayerId, payload.skillId, payload.targetId, payload.targetLocationId);
+            if (result && result.reveal) {
+              // 探查结果私发
+              wsSend(ws, { type: 'from_host', data: {
+                type: 'private_info',
+                text: `【查验】${game.players.find(x => x.id === result.reveal.targetId)?.name} 的身份是：${result.reveal.identity === 'killer' ? '杀手' : '平民'}`,
+              }});
+            }
+            break;
+          }
+          case 'vote': {
+            if (payload.targetId) {
+              room.votes.push({ voterId: myGamePlayerId, targetId: payload.targetId });
+            }
+            break;
+          }
+          case 'ready': {
+            room.readySet.add(myGamePlayerId);
+            break;
+          }
+          case 'next': {
+            // 房主推进（或全部就绪自动推进）
+            if (ws.isHost) {
+              room.readySet = new Set();
+              room.votes = [];
+              nextPhase(game);
+            }
+            break;
+          }
+          default: break;
+        }
+
+        // 全部存活就绪 → 自动推进
+        const aliveIds = game.players.filter(p => p.status === 'alive').map(p => p.id);
+        const allReady = aliveIds.length > 0 && aliveIds.every(id => room.readySet.has(id));
+        if (allReady) {
+          room.readySet = new Set();
+          if (game.phase === 'vote') {
+            submitVotes(game, room.votes);
+            room.votes = [];
+            nextPhase(game);
+          } else {
+            nextPhase(game);
+          }
+        }
+
+        // 广播状态
+        const state = serializeGame(game, null);
+        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state } }));
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state } });
         break;
       }
 
