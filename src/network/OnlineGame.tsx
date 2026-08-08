@@ -104,7 +104,7 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames, joinedPlayers: _joinedPlayers, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
@@ -163,6 +163,10 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   // 存活/死亡
   const alivePlayers = players.filter(p => p.status === 'alive')
   const deadPlayers = players.filter(p => p.status === 'dead')
+  // 真人生存数（就绪进度分母：空壳自动就绪，不参与计数）
+  const realAliveCount = alivePlayers.filter(p => !p.isBot).length
+  // 空壳存活数（调试用）
+  const botAliveCount = alivePlayers.filter(p => p.isBot).length
 
   // 同地点玩家
   const sameLocationPlayers = currentPlayer
@@ -674,6 +678,9 @@ ${skill.description}`)
       <header className="shrink-0 px-3 py-2.5 bg-slate-800/80 border-b border-slate-700 flex items-center gap-2">
         {/* 左：周/天 + 阶段 */}
         <div className="flex items-center gap-2 min-w-0">
+          {debugMode && (
+            <Badge className="text-[10px] bg-amber-600 shrink-0">调试</Badge>
+          )}
           <Badge variant="secondary" className="text-[10px] md:text-xs font-mono shrink-0 bg-slate-700 text-slate-200 border-slate-600">
             <Navigation className="w-3 h-3 mr-1 text-indigo-400" />
             第{round}周{day ? `·第${day}天` : ''}
@@ -702,6 +709,11 @@ ${skill.description}`)
             <Heart className="w-3 h-3" />
             {alivePlayers.length}
           </span>
+          {botAliveCount > 0 && (
+            <span className="text-[10px] text-slate-400 flex items-center gap-0.5" title="空壳玩家">
+              🤖{botAliveCount}
+            </span>
+          )}
           {deadPlayers.length > 0 && (
             <span className="text-[10px] text-red-400 flex items-center gap-0.5">
               <Skull className="w-3 h-3" />
@@ -1030,7 +1042,7 @@ ${skill.description}`)
                           return (
                             <span key={p.id} className="text-[10px] text-slate-300"
                               style={pHero ? {color: pHero.color} : {}}>
-                              {players.indexOf(p) + 1}.{p.name}
+                              {players.indexOf(p) + 1}.{p.name}{p.isBot ? '🤖' : ''}
                             </span>
                           )
                         })}
@@ -1172,7 +1184,7 @@ ${skill.description}`)
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
                 myReady ? 'bg-emerald-700 text-emerald-200' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
               }`}>
-              {myReady ? <span>✅ 已就绪 {readyCount}/{alivePlayers.length}</span> : <><Check className="w-3.5 h-3.5" />准备（{readyCount}/{alivePlayers.length}）</>}
+              {myReady ? <span>✅ 已就绪 {readyCount}/{realAliveCount}</span> : <><Check className="w-3.5 h-3.5" />准备（{readyCount}/{realAliveCount}）</>}
             </button>
           )}
 
@@ -1357,7 +1369,7 @@ function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills }: {
                   {idx + 1}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{isMe ? '你' : p.name}</p>
+                  <p className="text-sm font-medium text-white truncate">{isMe ? '你' : p.name}{!isMe && p.isBot ? '🤖' : ''}</p>
                 </div>
               </div>
               {isSelected && (

@@ -62,17 +62,18 @@ function shuffle(arr) {
 }
 
 // ---------- 创建游戏 ----------
-function createGame({ hostName, players: names, killerCount }) {
+function createGame({ hostName, players: names, killerCount, botNames = [] }) {
   const total = names.length;
   const targetKillers = killerCount > 0 ? Math.min(killerCount, Math.max(1, Math.floor(total / 4))) : Math.max(1, Math.floor(total / 4));
 
-  // 玩家
+  // 玩家（isBot 标记空壳，botNames 由调用方传入）
   const players = names.map((n, i) => ({
     id: genId('p'), name: n, identity: '', status: 'alive',
     locationId: '', isRevealed: false, heroId: '',
     halted: false, teleportReady: false, doubleMoveActive: false, doubleMoveFirstDone: false,
     normalAttackRemaining: 1, asylumAttackRemaining: 0,
     votedFor: null, voteCount: 0,
+    isBot: botNames.includes(n),
   }));
 
   // 身份分配（完全随机）
@@ -114,6 +115,7 @@ function serializeGame(game, viewerId) {
       heroId: p.heroId, halted: p.halted, teleportReady: p.teleportReady,
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed, votedFor: p.votedFor,
+      isBot: !!p.isBot, // 空壳标记：前端据此区分真假玩家
       normalAttackRemaining: p.normalAttackRemaining, asylumAttackRemaining: p.asylumAttackRemaining,
       // 身份：只给本人或已暴露（死亡/枪毙）
       identity: (p.id === viewerId || p.isRevealed) ? p.identity : undefined,
@@ -304,6 +306,15 @@ function checkEnd(game) {
     addEvent(game, '🏆 杀手阵营胜利！屠城成功');
     return true;
   }
+  // 兜底：所有真人玩家出局（调试模式的空壳不算真人，不会操作）
+  // 空壳只是占位角色，不能当真人继续撑局 —— 真人全没了直接结束，避免卡死
+  const realAlive = game.players.filter(p => p.status === 'alive' && !p.isBot).length;
+  if (realAlive === 0) {
+    game.winner = civs > 0 ? 'good' : 'evil';
+    game.phase = 'end';
+    addEvent(game, '🏁 所有真人玩家已出局，对局结束');
+    return true;
+  }
   return false;
 }
 
@@ -428,6 +439,10 @@ function handleVoteEnd(game) {
   game.trackedPlayerId = null; game.trackRecords = [];
   game.droneLocationId = null; game.dronePlayerId = null;
   game.phase = 'vote_result';
+  // 兜底：投票后真人全灭（如调试模式房主被投死）→ 立即判定结束，
+  // 否则 vote_result 阶段没有任何真人能点「下一轮」，游戏会卡死
+  const realAlive = game.players.filter(p => p.status === 'alive' && !p.isBot).length;
+  if (realAlive === 0) checkEnd(game);
 }
 
 function addEvent(game, text) {

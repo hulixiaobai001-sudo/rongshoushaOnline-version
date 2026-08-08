@@ -17,6 +17,8 @@ const rooms = new Map(); // roomId -> { hostId, hostName, playerCount, maxPlayer
 const roomHistory = [];   // 对局历史（创建/结束记录）
 const adminTokens = new Map(); // token -> expiry
 const ADMIN_PASSWORD = '柯基不爱喝茶';
+// 可用英雄池（与 gameEngine.HERO_POOL 一致）
+const HERO_SET = new Set(['xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun']);
 let announcement = '';    // 前台公告
 
 function verifyAdmin(req) {
@@ -337,6 +339,12 @@ function memberList(room) {
   return list;
 }
 
+// 就绪数：只算「存活的真玩家」（空壳自动就绪/不阻塞，不能当真人算）
+function getReadyCount(room) {
+  if (!room || !room.game) return 0;
+  return room.game.players.filter(p => p.status === 'alive' && !p.isBot && room.readySet.has(p.id)).length;
+}
+
 wss.on('connection', (ws) => {
   broadcastRoomList();
   ws.playerId = null;
@@ -454,7 +462,7 @@ wss.on('connection', (ws) => {
             : (room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null);
           if (room.game) {
             const st = serializeGame(room.game, gpId);
-            st.readyCount = room.readySet.size;
+            st.readyCount = getReadyCount(room);
             wsSend(ws, { type: 'from_host', data: { type: 'sync', state: st } });
           }
         }
@@ -488,15 +496,26 @@ wss.on('connection', (ws) => {
         // 玩家名单：房主 + 已加入玩家 + 调试空壳（bots）
         const names = [ws.playerName];
         room.players.forEach((p) => names.push(p.name));
-        if (Array.isArray(msg.bots)) {
-          msg.bots.forEach((b) => names.push(String(b).slice(0, 8)));
-        }
+        const bots = Array.isArray(msg.bots) ? msg.bots.map(b => String(b).slice(0, 8)) : [];
+        bots.forEach((b) => names.push(b));
         // 房主配置（人数设置）简化：杀手数 = 房主设置的或默认
         room.game = createGame({
           hostName: ws.playerName,
           players: names,
           killerCount: 0, // 默认动态
+          botNames: bots, // 标记空壳玩家（isBot）
         });
+        // 调试台配置覆盖（按名字匹配：身份/英雄）
+        if (Array.isArray(msg.configs)) {
+          msg.configs.forEach(cfg => {
+            const gp = room.game.players.find(p => p.name === String(cfg.name || '').slice(0, 8));
+            if (!gp) return;
+            if (cfg.identity === 'killer' || cfg.identity === 'civilian') gp.identity = cfg.identity;
+            if (cfg.heroId && HERO_SET.has(cfg.heroId)) gp.heroId = cfg.heroId;
+          });
+        }
+        // 空壳玩家自动就绪：它们不是真人、不需要操作，但绝不能阻塞游戏推进
+        room.game.players.forEach(gp => { if (gp.isBot) room.readySet.add(gp.id); });
         // 建立 serverId ↔ gamePlayerId 映射（房主=players[0]）
         room.gamePlayerMap = new Map();
         room.gamePlayerMap.set(ws.playerId, room.game.players[0].id);
@@ -519,12 +538,16 @@ wss.on('connection', (ws) => {
         // 通知所有玩家进入游戏 + 分别私发带身份的状态
         // 房主
         wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_started' } });
-        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_init', state: serializeGame(room.game, room.game.players[0].id) } });
+        const hostInitSt = serializeGame(room.game, room.game.players[0].id);
+        hostInitSt.readyCount = getReadyCount(room);
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_init', state: hostInitSt } });
         // 玩家（各自身份）
         room.players.forEach((p, serverId) => {
           wsSend(p.ws, { type: 'from_host', data: { type: 'game_started' } });
           const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
-          wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: serializeGame(room.game, gpId) } });
+          const st = serializeGame(room.game, gpId);
+          st.readyCount = getReadyCount(room);
+          wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: st } });
         });
         break;
       }
@@ -582,9 +605,9 @@ wss.on('connection', (ws) => {
           default: break;
         }
 
-        // 全部存活就绪 → 自动推进
-        const aliveIds = game.players.filter(p => p.status === 'alive').map(p => p.id);
-        const allReady = aliveIds.length > 0 && aliveIds.every(id => room.readySet.has(id));
+        // 全部存活真人就绪 → 自动推进（空壳不是真人，不阻塞游戏）
+        const aliveIds = game.players.filter(p => p.status === 'alive' && !p.isBot).map(p => p.id);
+        const allReady = aliveIds.length === 0 || aliveIds.every(id => room.readySet.has(id));
         if (allReady) {
           room.readySet = new Set();
           if (game.phase === 'vote') {
@@ -598,12 +621,12 @@ wss.on('connection', (ws) => {
 
         // 广播状态（每个玩家看到自己身份）
         const hostSt = serializeGame(game, game.players[0].id);
-        hostSt.readyCount = room.readySet.size;
+        hostSt.readyCount = getReadyCount(room);
         wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state: hostSt } });
         room.players.forEach((p, serverId) => {
           const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
           const st = serializeGame(game, gpId);
-          st.readyCount = room.readySet.size;
+          st.readyCount = getReadyCount(room);
           wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: st } });
         });
         break;
@@ -615,7 +638,9 @@ wss.on('connection', (ws) => {
         if (room && room.game) {
           const gpId = ws.isHost ? room.game.players[0].id
             : (room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null);
-          wsSend(ws, { type: 'from_host', data: { type: 'sync', state: serializeGame(room.game, gpId) } });
+          const st = serializeGame(room.game, gpId);
+          st.readyCount = getReadyCount(room);
+          wsSend(ws, { type: 'from_host', data: { type: 'sync', state: st } });
         }
         break;
       }

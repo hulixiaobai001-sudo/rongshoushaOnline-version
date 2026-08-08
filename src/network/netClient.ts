@@ -171,9 +171,9 @@ export function netToPeer(peerId: string, data: any) {
   send({ type: 'to_peer', peerId, data })
 }
 
-/** 服务器权威：开始游戏（房主，调试模式带空壳） */
-export function netGameStart(bots?: string[]) {
-  send({ type: 'game_start', bots })
+/** 服务器权威：开始游戏（房主，调试模式带空壳+身份/英雄配置） */
+export function netGameStart(bots?: string[], configs?: Array<{ name: string; identity?: string; heroId?: string }>) {
+  send({ type: 'game_start', bots, configs })
 }
 
 /** 服务器权威：发送游戏操作 */

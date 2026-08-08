@@ -19,8 +19,14 @@ const DEBUG_PHRASE = '柯基不爱喝茶'
 
 // ═══════════════════════════════════════════════════
 //  玩家管理面板（房主：加人/删人/身份/角色）
+//  调试模式（debugMode）下只保留「配置身份/英雄」+「删除空壳」，
+//  添加玩家/人数控制/快速补满在调试模式下无效（服务器按bots名单建角色），直接隐藏
 // ═══════════════════════════════════════════════════
-function RoleAssignmentPanel() {
+function RoleAssignmentPanel({ debugMode, botNames, onBotRemove }: {
+  debugMode: boolean
+  botNames: string[]
+  onBotRemove: (name: string) => void
+}) {
   const store = useGameStore()
   const [expanded, setExpanded] = useState(false)
   const [newName, setNewName] = useState('')
@@ -35,8 +41,9 @@ function RoleAssignmentPanel() {
     setNewName('')
   }
 
-  // 人数设置 → 同步玩家列表（调试台绝对生效）
+  // 人数设置 → 同步玩家列表（仅非调试模式使用；调试模式下人数由联机+空壳决定）
   const syncPlayers = () => {
+    if (debugMode) return
     const total = Math.max(4, Math.min(12, store.killerCount + store.civilianCount))
     // 先补够，再删多
     while (store.players.length < total) {
@@ -46,10 +53,6 @@ function RoleAssignmentPanel() {
       const last = store.players[store.players.length - 1]
       if (last) store.removePlayer(last.id)
     }
-  }
-
-  const removePlayer = (id: string) => {
-    store.removePlayer(id)
   }
 
   const toggleIdentity = (playerId: string) => {
@@ -73,10 +76,10 @@ function RoleAssignmentPanel() {
       <CardContent className="p-3">
         <button onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-between text-xs font-bold text-indigo-400">
-          <span>🎭 房间设置（{players.length}/12 人 · 🔴杀手 {totalKillers} · 🔵平民 {players.length - totalKillers}）</span>
+          <span>🎭 调试台（{players.length}/12 人 · 🔴杀手 {totalKillers} · 🔵平民 {players.length - totalKillers}）</span>
           <span>{expanded ? '收起' : '展开'}</span>
         </button>
-        {expanded && (
+        {expanded && !debugMode && (
           <div className="mt-2 mb-3 flex items-center gap-2 bg-slate-900/40 rounded-lg p-2">
             <span className="text-[10px] text-slate-400 shrink-0">杀手</span>
             <div className="flex items-center gap-1">
@@ -99,17 +102,19 @@ function RoleAssignmentPanel() {
         )}
         {expanded && (
           <div className="mt-2 space-y-2">
-            {/* 添加玩家 */}
-            <div className="flex gap-1.5">
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={8}
-                placeholder="输入玩家名字（可留空自动编号）"
-                onKeyDown={(e) => { if (e.key === 'Enter') addPlayer() }}
-                className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none" />
-              <Button size="sm" onClick={addPlayer} disabled={players.length >= 12}
-                className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs shrink-0">
-                添加
-              </Button>
-            </div>
+            {/* 添加玩家（仅非调试模式） */}
+            {!debugMode && (
+              <div className="flex gap-1.5">
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={8}
+                  placeholder="输入玩家名字（可留空自动编号）"
+                  onKeyDown={(e) => { if (e.key === 'Enter') addPlayer() }}
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none" />
+                <Button size="sm" onClick={addPlayer} disabled={players.length >= 12}
+                  className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs shrink-0">
+                  添加
+                </Button>
+              </div>
+            )}
 
             {/* 玩家列表 */}
             <div className="space-y-1.5 max-h-[260px] overflow-auto">
@@ -119,9 +124,10 @@ function RoleAssignmentPanel() {
               {players.map((p: any) => {
                 const curIdentity = editIdentity[p.id] || p.identity || 'civilian'
                 const curHero = editHero[p.id] || p.heroId
+                const isBot = botNames.includes(p.name)
                 return (
                   <div key={p.id} className="flex items-center gap-1.5 bg-slate-900/50 rounded px-2 py-1.5">
-                    <span className="text-xs text-slate-300 w-14 truncate shrink-0">{p.name}</span>
+                    <span className="text-xs text-slate-300 w-14 truncate shrink-0">{p.name}{isBot && <span className="ml-0.5 text-[9px]">🤖</span>}</span>
                     <button onClick={() => toggleIdentity(p.id)}
                       className={`text-[10px] px-2 py-0.5 rounded font-medium shrink-0 ${
                         curIdentity === 'killer' ? 'bg-red-900/60 text-red-300' : 'bg-blue-900/60 text-blue-300'
@@ -146,15 +152,23 @@ function RoleAssignmentPanel() {
                       <option value="yanzhuo" disabled>言浊（暂未开放）</option>
                       <option value="jiangfeng" disabled>江枫（暂未开放）</option>
                     </select>
-                    <button onClick={() => removePlayer(p.id)}
-                      className="text-slate-500 hover:text-red-400 text-xs shrink-0 w-4">✕</button>
+                    {/* 删除：仅空壳可删（联机玩家由对方退出后自动移除，删了也不生效） */}
+                    {isBot ? (
+                      <button onClick={() => {
+                        store.removePlayer(p.id)
+                        onBotRemove(p.name)
+                      }}
+                        className="text-slate-500 hover:text-red-400 text-xs shrink-0 w-4" title="删除该空壳">✕</button>
+                    ) : (
+                      <span className="w-4 shrink-0" />
+                    )}
                   </div>
                 )
               })}
             </div>
 
-            {/* 快速填充 */}
-            {players.length < 4 && (
+            {/* 快速填充（仅非调试模式） */}
+            {!debugMode && players.length < 4 && (
               <Button variant="outline" size="sm" onClick={() => {
                 const current = store.players.length
                 for (let i = current; i < 4; i++) {
@@ -165,7 +179,11 @@ function RoleAssignmentPanel() {
               </Button>
             )}
 
-            <p className="text-[9px] text-slate-500 text-center">点击身份切换 🔴杀手/🔵平民 · 下拉选英雄 · 开局后生效</p>
+            <p className="text-[9px] text-slate-500 text-center">
+              {debugMode
+                ? '🤖 空壳可删 · 身份/英雄开局生效 · 杀手数由服务器按人数动态分配'
+                : '点击身份切换 🔴杀手/🔵平民 · 下拉选英雄 · 开局后生效'}
+            </p>
           </div>
         )}
       </CardContent>
@@ -423,7 +441,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const enterDebugMode = () => {
     const existing = players.filter(p => !p.startsWith('bot_'))
     const existingCount = existing.length
-    const needed = Math.max(0, 8 - existingCount) // 填充到8人
+    // 总人数补到8（含房主）：房主1 + 联机existingCount + 空壳needed = 8
+    // 空壳只是占位角色，绝不能顶替真玩家 —— 单人调试时就是 房主+7空壳=8人
+    const needed = Math.max(0, 8 - existingCount - 1)
     const botIds = Array.from({ length: needed }, (_, i) => `bot_${i + 1}`)
     const botNames = Array.from({ length: needed }, (_, i) => `空壳玩家${i + 1}`)
     setPlayers([...existing, ...botIds])
@@ -431,15 +451,32 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     const namesMap = {...playerNames}
     botIds.forEach((id, i) => { namesMap[id] = botNames[i] })
     setPlayerNames(namesMap)
+    // 空壳也进房间设置面板（调试台能配置它们的身份/英雄）
+    botNames.forEach(name => {
+      const exist = store.players.find((p: any) => p.name === name)
+      if (!exist) store.addPlayer(name)
+    })
     setDebugMode(true)
     setStatus(`调试模式已启动（${existingCount}名联机玩家 + ${needed}个空壳）`)
   }
 
+  // 调试台删除空壳：同步移除 botPlayerNames + players 里的 bot_ 占位（保持两边一致）
+  const handleBotRemove = (name: string) => {
+    const idx = botPlayerNames.indexOf(name)
+    if (idx >= 0) {
+      setBotPlayerNames(prev => prev.filter(n => n !== name))
+      setPlayers(prev => prev.filter(id => id !== `bot_${idx + 1}`))
+    }
+  }
+
   const handleStartGame = () => {
-    // 服务器权威：服务器创建游戏（调试模式带空壳玩家）
+    // 服务器权威：服务器创建游戏（调试模式带空壳玩家 + 调试台配置）
     if (debugMode) {
-      const bots = Array.from({ length: 3 }, (_, i) => `空壳${i + 1}`)
-      netGameStart(bots)
+      // 空壳名单：与房间玩家列表一致（botPlayerNames）
+      const bots = [...botPlayerNames]
+      // 调试台配置：store.players 的身份/英雄（含空壳，按名字匹配服务器）
+      const configs = store.players.map((p: any) => ({ name: p.name, identity: p.identity, heroId: p.heroId }))
+      netGameStart(bots, configs)
     } else {
       netGameStart()
     }
@@ -454,7 +491,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       <OnlineGame
         isHost={mode === 'host'}
         isSpectator={isSpectator}
-        joinedPlayers={[...new Set(players)].filter((pid: string) => pid !== netGetState().playerId).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
+        joinedPlayers={[...new Set(players)].filter((pid: string) => pid !== netGetState().playerId && !pid.startsWith('bot_')).map((pid: string) => ({ serverId: pid, name: playerNames[pid] || '玩家' }))}
         debugMode={debugMode}
         botNames={botPlayerNames}
         onLeave={() => { setInGame(false); handleLeaveRoom() }}
@@ -657,7 +694,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                     {/* 联机玩家 */}
                     {players.map((id, i) => {
                       const isBot = id.startsWith('bot_')
-                      const name = isBot ? `空壳${id.slice(-1)}`
+                      const name = isBot ? `空壳玩家${id.slice(-1)}`
                         : (playerNames[id] || `玩家${i + 2}`)
                       return (
                         <div key={id}
@@ -677,9 +714,13 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                 </CardContent>
               </Card>
 
-              {/* 房主设置（合并面板，仅调试模式显示） */}
+              {/* 调试台（仅调试模式显示） */}
               {mode === 'host' && debugMode && (
-                <RoleAssignmentPanel />
+                <RoleAssignmentPanel
+                  debugMode={debugMode}
+                  botNames={botPlayerNames}
+                  onBotRemove={handleBotRemove}
+                />
               )}
 
               {/* 调试模式按钮 */}
