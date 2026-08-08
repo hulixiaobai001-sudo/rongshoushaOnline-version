@@ -141,7 +141,14 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
         if (Array.isArray(msg.state.players) && msg.state.players.length > 0) {
           store.applyRemoteState(msg.state)
           setLoading(false)
-          // 还没收到自己的身份 → 服务器在game_init时会私发
+          // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
+          if (!store.myPlayerId && !isSpectator) {
+            const me = msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
+            if (me) {
+              store.setMyInfo(me.id, me.identity)
+              if (me.heroId) store.setPlayerHero(me.id, me.heroId)
+            }
+          }
         }
       } else if (msg.type === 'your_role') {
         store.setMyInfo(msg.playerId, msg.identity)
@@ -154,12 +161,21 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
     }
 
     netOn('hostMessage', applyServerState)
-    // 主动请求状态（服务器每次操作后广播，但请求一次兜底）
+    // 主动请求状态（服务器响应）
     setTimeout(() => {
       netToHost({ type: 'request_state' })
     }, 300)
-    // 兜底：8秒强制结束
-    const t2 = setTimeout(() => setLoading(false), 8000)
+    // 兜底：8秒强制结束 + 重试请求（防单次丢失）
+    const t2 = setTimeout(() => {
+      setLoading(false)
+      netToHost({ type: 'request_state' })
+      // 再等2秒后如果还没有玩家数据再请求一次
+      setTimeout(() => {
+        if (!store.players || store.players.length === 0) {
+          netToHost({ type: 'request_state' })
+        }
+      }, 2000)
+    }, 8000)
     return () => clearTimeout(t2)
   }, [])
 
