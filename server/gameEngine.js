@@ -87,7 +87,12 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
   players.forEach((p, i) => { if (i < pool.length) p.heroId = pool[i]; });
 
   // 地图
-  const locations = DEFAULT_MAP.map(l => ({ ...l, isBlocked: false, effect: LOCATION_EFFECTS[l.name] ? { type: LOCATION_EFFECTS[l.name], name: l.name } : null }));
+  const locations = DEFAULT_MAP.map(l => {
+    const effect = LOCATION_EFFECTS[l.name] ? { type: LOCATION_EFFECTS[l.name], name: l.name } : null;
+    // 死人湾·单向桥：附带单向可达目的地（前端可达性/本地校验依赖 extraDestinations）
+    if (effect?.type === 'bridge_jump') effect.extraDestinations = [...BRIDGE_DESTS];
+    return { ...l, isBlocked: false, effect };
+  });
 
   // 随机放置
   players.forEach(p => {

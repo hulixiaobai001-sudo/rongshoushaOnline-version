@@ -677,9 +677,9 @@ ${skill.description}`)
       {/* ═══ 顶栏 ═══ */}
       <header className="shrink-0 px-3 py-2.5 bg-slate-800/80 border-b border-slate-700 flex items-center gap-2">
         {/* 左：周/天 + 阶段 */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           {debugMode && (
-            <Badge className="text-[10px] bg-amber-600 shrink-0">调试</Badge>
+            <span className="shrink-0 w-2 h-2 rounded-full bg-amber-500" title="调试模式" />
           )}
           <Badge variant="secondary" className="text-[10px] md:text-xs font-mono shrink-0 bg-slate-700 text-slate-200 border-slate-600">
             <Navigation className="w-3 h-3 mr-1 text-indigo-400" />
