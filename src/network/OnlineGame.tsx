@@ -66,11 +66,10 @@ interface OnlineGameProps {
   onLeave: () => void
 }
 
-export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLeave }: OnlineGameProps) {
+export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   const store = useGameStore()
   const {
     phase, round, players, locations,
-    movePlayer, nextPhase, killPlayer,
     activateKungFu, activateTeleport, activateDoubleMove, applyHalt, roundSkillUsage,
     usedSkills,
   } = store
@@ -89,7 +88,6 @@ export function OnlineGame({ isHost, isSpectator, botNames, joinedPlayers, onLea
   const [toast, setToast] = useState<string | null>(null)
   const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
-  const voteCollector = useRef<Array<{ voterId: string; targetId: string }>>([])
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setReadyPlayers(new Set()); setMyReady(false) }, [phase])
@@ -668,13 +666,9 @@ ${skill.description}`)
         {/* ── 投票阶段专用界面 ── */}
         {phase === 'vote' ? (
           <VoteSection
-            isHost={isHost}
-            voteCollector={voteCollector}
             currentPlayer={currentPlayer} hero={hero}
             alivePlayers={alivePlayers}
             usedSkills={usedSkills}
-            store={store}
-            onNextPhase={handleReady}
           />
         ) : phase === 'vote_result' ? (
           <VoteResultSection
@@ -1249,12 +1243,9 @@ function EndGameSection({ players, alivePlayers }: { players: any[]; alivePlayer
 // ═══════════════════════════════════════════════════
 //  投票阶段组件
 // ═══════════════════════════════════════════════════
-function VoteSection({ isHost, currentPlayer, hero, alivePlayers, usedSkills, store, onNextPhase, voteCollector }: {
-  isHost: boolean;
-  voteCollector?: any;
+function VoteSection({ currentPlayer, hero, alivePlayers, usedSkills }: {
   currentPlayer: any; hero: any;
   alivePlayers: any[]; usedSkills: Record<string, string[]>;
-  store: any; onNextPhase: () => void;
 }) {
   const [voteTarget, setVoteTarget] = useState<string | null>(null)
   const [gunshotTarget, setGunshotTarget] = useState<string | null>(null)
