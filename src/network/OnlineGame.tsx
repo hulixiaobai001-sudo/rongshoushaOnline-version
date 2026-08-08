@@ -83,7 +83,6 @@ export function OnlineGame({ isHost, isSpectator, onLeave }: OnlineGameProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [hasMoved, setHasMoved] = useState(false)
-  const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set())
   const [myReady, setMyReady] = useState(false)
   const [readyCount, setReadyCount] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
