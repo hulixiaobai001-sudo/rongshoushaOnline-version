@@ -505,12 +505,16 @@ wss.on('connection', (ws) => {
             });
           }
         });
-        // 通知所有玩家进入游戏 + 广播初始状态
-        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'game_started' } }));
-        const initState = serializeGame(room.game, null);
-        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: initState } }));
+        // 通知所有玩家进入游戏 + 分别私发带身份的状态
+        // 房主
         wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_started' } });
-        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_init', state: initState } });
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_init', state: serializeGame(room.game, room.game.players[0].id) } });
+        // 玩家（各自身份）
+        room.players.forEach((p, serverId) => {
+          wsSend(p.ws, { type: 'from_host', data: { type: 'game_started' } });
+          const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
+          wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: serializeGame(room.game, gpId) } });
+        });
         break;
       }
 
@@ -582,10 +586,12 @@ wss.on('connection', (ws) => {
           }
         }
 
-        // 广播状态
-        const state = serializeGame(game, null);
-        room.players.forEach((p) => wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state } }));
-        wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state } });
+        // 广播状态（每个玩家看到自己身份）
+        wsSend(room.hostWs, { type: 'from_host', data: { type: 'sync', state: serializeGame(game, game.players[0].id) } });
+        room.players.forEach((p, serverId) => {
+          const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
+          wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: serializeGame(game, gpId) } });
+        });
         break;
       }
 
