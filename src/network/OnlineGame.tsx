@@ -54,6 +54,44 @@ const PHASE_LABEL: Record<string, string> = {
 // ─── 获取移动阶段技能的提示 ──────────────────────
 const MOVE_SKILL_IDS = ['zhuxun_double_move', 'fengming_teleport']
 
+// ─── 点线距离（用于检测地点是否挡在连线中间） ───
+function pointLineDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+  const dx = x2 - x1, dy = y2 - y1
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return Math.hypot(px - x1, py - y1)
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2
+  t = Math.max(0, Math.min(1, t))
+  const cx = x1 + t * dx, cy = y1 + t * dy
+  return Math.hypot(px - cx, py - cy)
+}
+
+// ─── 生成避开中间地点的曲线路径 ───
+function curvePath(locations: any[], loc: any, target: any) {
+  const mx = (loc.x + target.x) / 2, my = (loc.y + target.y) / 2
+  const dx = target.x - loc.x, dy = target.y - loc.y
+  const len = Math.hypot(dx, dy) || 1
+  const nx = -dy / len, ny = dx / len  // 垂直单位向量
+
+  // 找最近的地点在连线中间挡路
+  let nearest: any = null, minDist = Infinity
+  locations.forEach((p: any) => {
+    if (p.id === loc.id || p.id === target.id) return
+    const d = pointLineDist(p.x, p.y, loc.x, loc.y, target.x, target.y)
+    if (d < minDist) { minDist = d; nearest = p }
+  })
+
+  if (nearest && minDist < 7) {
+    // 弯曲方向背离最近地点
+    const vx = mx - nearest.x, vy = my - nearest.y
+    let dir = 1
+    if (vx * nx + vy * ny < 0) dir = -1
+    const bow = Math.max(5, (7 - minDist) * 2.5)
+    const cpx = mx + nx * bow * dir, cpy = my + ny * bow * dir
+    return `M ${loc.x} ${loc.y} Q ${cpx} ${cpy} ${target.x} ${target.y}`
+  }
+  return `M ${loc.x} ${loc.y} L ${target.x} ${target.y}`
+}
+
 // ═══════════════════════════════════════════════════
 //  OnlineGame 主组件
 // ═══════════════════════════════════════════════════
@@ -729,9 +767,11 @@ ${skill.description}`)
                     (r.id === loc.id && currentPlayer?.locationId === target.id) ||
                     (r.id === target.id && currentPlayer?.locationId === loc.id)
                   )
+                  const d = curvePath(locations, loc, target)
                   return (
-                    <line key={`${loc.id}_${connId}`}
-                      x1={loc.x} y1={loc.y} x2={target.x} y2={target.y}
+                    <path key={`${loc.id}_${connId}`}
+                      d={d}
+                      fill="none"
                       stroke={isHighlighted ? '#818cf8' : '#334155'}
                       strokeWidth={isHighlighted ? '1' : '0.6'}
                       strokeDasharray={isHighlighted ? '1,1' : 'none'}
