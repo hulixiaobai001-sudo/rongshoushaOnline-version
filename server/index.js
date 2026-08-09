@@ -606,17 +606,7 @@ wss.on('connection', (ws) => {
           gi++;
         });
         room.gameStarted = true;
-        // 私发身份给每个真人玩家
-        room.game.players.forEach((gp, i) => {
-          if (i === 0) return; // 房主自己知道（room.hostWs）
-          const serverId = realEntries[i - 1]?.[0];
-          if (serverId) {
-            wsSend(room.players.get(serverId).ws, {
-              type: 'from_host', data: { type: 'your_role', playerId: gp.id, identity: gp.identity, heroId: gp.heroId },
-            });
-          }
-        });
-        // 通知所有玩家进入游戏 + 分别私发带身份的状态
+        // 通知所有玩家进入游戏（先 game_started + game_init 让前端挂载 OnlineGame）
         // 房主
         wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_started' } });
         const hostInitSt = serializeGame(room.game, room.game.players[0].id);
@@ -629,6 +619,17 @@ wss.on('connection', (ws) => {
           const st = serializeGame(room.game, gpId);
           st.readyCount = getReadyCount(room);
           wsSend(p.ws, { type: 'from_host', data: { type: 'game_init', state: st } });
+        });
+        // 最后私发身份（必须在 game_started 之后：前端 OnlineGame 挂载后才收得到 your_role，
+        // 否则 myPlayerId 设置失败 → 玩家"地图加载了但全动不了/没角色"）
+        room.game.players.forEach((gp, i) => {
+          if (i === 0) return; // 房主自己知道（room.hostWs）
+          const serverId = realEntries[i - 1]?.[0];
+          if (serverId) {
+            wsSend(room.players.get(serverId).ws, {
+              type: 'from_host', data: { type: 'your_role', playerId: gp.id, identity: gp.identity, heroId: gp.heroId },
+            });
+          }
         });
         break;
       }

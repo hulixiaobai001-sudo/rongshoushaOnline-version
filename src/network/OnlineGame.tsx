@@ -217,14 +217,19 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
           }
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
           if (!store.myPlayerId && !isSpectator) {
-            // 房主固定认 players[0]（房主没有 your_role 消息，此前 myPlayerId 一直为空
-            // 导致死亡检测失效、观战视角异常——"杀手和平民一起死"的元凶之一）
+            // 房主固定认 players[0]（房主没有 your_role 消息）
             let me = isHost ? msg.state.players[0] : null
             if (!me) {
               const savedId = (() => { try { return localStorage.getItem('rs_my_player_id') } catch { return null } })()
               me = savedId
                 ? msg.state.players.find((p: any) => p.id === savedId && (p.identity === 'killer' || p.identity === 'civilian'))
-                : msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
+                : null
+              if (!me) {
+                // 双保险：未暴露身份的唯一玩家 = 自己（只有 viewerId 本人有身份，
+                // 死亡暴露的玩家 isRevealed=true 已排除）
+                const candidates = msg.state.players.filter((p: any) => (p.identity === 'killer' || p.identity === 'civilian') && !p.isRevealed)
+                me = candidates.length === 1 ? candidates[0] : null
+              }
             }
             if (me && (me.identity === 'killer' || me.identity === 'civilian')) {
               store.setMyInfo(me.id, me.identity)
