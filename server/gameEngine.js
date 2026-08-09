@@ -185,6 +185,8 @@ function nextPhase(game) {
         if (av.length) p.locationId = av[Math.floor(Math.random() * av.length)].id;
       }
     });
+    // 进入下一轮：清空投票详情（vote_result 展示已结束）
+    game.players.forEach(p => { p.votedFor = null; p.voteCount = 0; });
     // 随机放置/重排后：身处死人沼泽的杀手补额外攻击次数
     grantAsylumIfInMarsh(game);
     game.phase = 'action1';
@@ -553,9 +555,8 @@ function handleVoteEnd(game) {
   if (av.length) game.players.filter(p => p.status === 'alive').forEach(p => {
     p.locationId = av[Math.floor(Math.random() * av.length)].id;
   });
-  // 重置
+  // 重置（votedFor/voteCount 保留到 vote_result 展示，进入下一轮时才清空）
   game.players.forEach(p => {
-    p.votedFor = null; p.voteCount = 0;
     if (p.halted) p.halted = false;
     if (p.identity === 'killer') { p.normalAttackRemaining = 1; p.asylumAttackRemaining = 0; }
   });

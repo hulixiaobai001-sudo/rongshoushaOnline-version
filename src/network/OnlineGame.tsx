@@ -124,13 +124,10 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const [myReady, setMyReady] = useState(false)
   const [readyCount, setReadyCount] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
-  const [hasAttacked, setHasAttacked] = useState(false)
   const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setMyReady(false) }, [phase])
-  // 攻击次数按轮刷新（投票结束后重置，阶段变化不重置）
-  useEffect(() => { setHasAttacked(false) }, [round])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
   const myPlayer = isSpectator
@@ -144,6 +141,9 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const isDying = myPlayer && myPlayer.status === 'dying'
   const currentPlayer = isDead || isDying ? null : myPlayer
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
+
+  // 攻击剩余次数（多刀地点 = 额外攻击 + 常规攻击；服务器权威计数，前端据此判断）
+  const atkCharges = (currentPlayer?.normalAttackRemaining || 0) + (currentPlayer?.asylumAttackRemaining || 0)
 
   // ── 阶段信息 ──
   // 游戏结束时注销房间（不再显示在大厅）
@@ -1191,24 +1191,24 @@ ${skill.description}`)
           </div>
 
           {/* 中：攻击按钮（杀手专用） */}
-          {!isSpectator && currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
+          {!isSpectator && !isDead && currentPlayer?.identity === 'killer' && phase.startsWith('action') && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={() => {
-              if (hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)) {
-                info('已攻击过', '本回合你已经刀过人了，投票结束后刷新')
+              if (atkCharges <= 0) {
+                info('已攻击过', '本回合攻击次数已用完，投票结束后刷新')
                 return
               }
               if (sameLocationPlayers.length === 0) { info('无目标', '附近没有其他玩家'); return }
               setSelectedSkill({ id: 'basic_kill', name: '攻击', description: '', type: 'active', targetType: 'same_location_player', limit: 'unlimited', usedCount: 0, maxUses: 99, usablePhase: [] } as any)
               setInteraction('skill_target')
             }}
-              disabled={hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)}
+              disabled={atkCharges <= 0}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-                hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0)
+                atkCharges <= 0
                   ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
                   : 'bg-red-700 hover:bg-red-600 text-white'
               }`}>
               <Swords className="w-3.5 h-3.5" />
-              {hasAttacked || (currentPlayer && (currentPlayer.normalAttackRemaining || 0) <= 0) ? '已刀人' : '刀人'}
+              {atkCharges > 0 ? `刀人(${atkCharges})` : '已刀人'}
             </button>
           )}
 
