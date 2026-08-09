@@ -68,6 +68,9 @@ function handleMessage(msg: any) {
     case 'from_player':
       fire('onPlayerMessage', msg)
       break
+    case 'room_members':
+      fire('onRoomMembers', msg.players || [])
+      break
     case 'room_closed':
       fire('onRoomClosed', msg)
       break
@@ -191,8 +194,13 @@ export function netLeaveRoom() {
   send({ type: 'room_leave' })
 }
 
+/** 房主请求房间成员列表（轮询兜底，防 player_joined 通知丢失） */
+export function netRequestRoomMembers() {
+  send({ type: 'room_members_request' })
+}
+
 /** 注册事件回调 */
-export function netOn(event: 'created' | 'joined' | 'playerJoin' | 'playerLeave' | 'hostMessage' | 'playerMessage' | 'roomClosed' | 'members' | 'error', fn: NetHandler) {
+export function netOn(event: 'created' | 'joined' | 'playerJoin' | 'playerLeave' | 'hostMessage' | 'playerMessage' | 'roomClosed' | 'members' | 'roomMembers' | 'error', fn: NetHandler) {
   const key = 'on' + event.charAt(0).toUpperCase() + event.slice(1)
   if (!handlers[key]) handlers[key] = []
   handlers[key].push(fn)

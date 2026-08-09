@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { netCreateRoom, netJoinRoom, netLeaveRoom, netDisconnect, netOn, netGetState, netGameStart } from './netClient'
+import { netCreateRoom, netJoinRoom, netLeaveRoom, netDisconnect, netOn, netGetState, netGameStart, netRequestRoomMembers } from './netClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -306,8 +306,37 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       setMode(null)
       setInGame(false)
     })
+    // 轮询兜底：房主定期拉取成员列表，补齐丢失的 player_joined（只补不删，不影响调试空壳）
+    netOn('roomMembers', (members: any[]) => {
+      const others = (members || []).filter((m: any) => !m.isHost)
+      if (others.length === 0) return
+      setPlayers(prev => {
+        const missing = others.filter(m => !prev.includes(m.id))
+        if (missing.length === 0) return prev
+        return [...prev, ...missing.map(m => m.id)]
+      })
+      const namesMap: Record<string, string> = {}
+      others.forEach((m: any) => { namesMap[m.id] = m.name })
+      setPlayerNames(prev => ({ ...prev, ...namesMap }))
+      others.filter((m: any) => m.isSpectator).forEach((m: any) => {
+        setSpectatorIds(prev => prev.includes(m.id) ? prev : [...prev, m.id])
+      })
+      others.forEach((m: any) => {
+        if (m.name && m.name !== '连接中...') {
+          const exist = store.players.find((p: any) => p.name === m.name)
+          if (!exist) store.addPlayer(String(m.name).slice(0, 8))
+        }
+      })
+    })
     return () => { netDisconnect() }
   }, [])
+
+  // 房主房间界面：每 5 秒轮询成员列表（兜底：player_joined 通知丢失也能补齐显示）
+  useEffect(() => {
+    if (mode !== 'host') return
+    const t = setInterval(() => { netRequestRoomMembers() }, 5000)
+    return () => clearInterval(t)
+  }, [mode])
 
   // 调试模式隐藏入口：连点5次
   const debugTapRef = useRef(0)

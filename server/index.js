@@ -714,6 +714,15 @@ wss.on('connection', (ws) => {
         broadcastRoomList();
         break;
 
+      case 'room_members_request': {
+        // 房主定期轮询成员列表（兜底：player_joined 通知偶发丢失时也能补齐显示）
+        const room = gameRooms.get(ws.roomId);
+        if (room) {
+          wsSend(ws, { type: 'room_members', players: memberList(room) });
+        }
+        break;
+      }
+
       case 'room_register':
         if (msg.roomId && !rooms.has(msg.roomId)) {
           const now = Date.now();
