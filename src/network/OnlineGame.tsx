@@ -783,6 +783,12 @@ ${skill.description}`)
           <BookOpen className="w-4 h-4" />
         </button>
       </header>
+      {/* 濒死提示（延迟死亡：等待所有人准备后结算） */}
+      {isDying && (
+        <div className="shrink-0 bg-red-900/90 border-b border-red-700 px-3 py-2 text-center animate-pulse">
+          <p className="text-xs font-bold text-red-200">💔 你已濒死！等待所有人准备后结算...</p>
+        </div>
+      )}
       {/* 通知条 */}
       {toast && (
         <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200 flex items-center justify-between">
@@ -846,6 +852,8 @@ ${skill.description}`)
                 const isTeleportReady = isMoveMode && currentPlayer?.teleportReady
                 const isReachable = isMoveMode && (isTeleportReady ? true : reachableLocations.some(r => r.id === loc.id))
                 const isClickable = isMoveMode ? isReachable : true
+                // 甘露之地·人头攒动：平民看不清周围的人（地图/面板都不显示其他玩家）
+                const crowdedHide = loc.effect?.type === 'crowded' && currentPlayer?.identity === 'civilian' && !isSpectator && !isDead
 
                 return (
                   <g key={loc.id}
@@ -929,8 +937,8 @@ ${skill.description}`)
                         {loc.effect.name}
                       </text>
                     )}
-                    {/* 玩家图标 - 仅当前地点显示（观战者看全图） */}
-                    {(isCurrentLoc || isSpectator || isDead) && locPlayers.map((p, i) => {
+                    {/* 玩家图标 - 仅当前地点显示（观战者看全图）；甘露之地平民看不清周围 */}
+                    {(isCurrentLoc || isSpectator || isDead) && !crowdedHide && locPlayers.map((p, i) => {
                       const angle = (2 * Math.PI * i) / Math.max(locPlayers.length, 1) - Math.PI / 2
                       const px = loc.x + Math.cos(angle) * 7
                       const py = loc.y + Math.sin(angle) * 7
