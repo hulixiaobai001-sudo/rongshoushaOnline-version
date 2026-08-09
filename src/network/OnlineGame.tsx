@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations, HERO_POOL_V1_1_IDS } from '@/data/gameData'
@@ -160,24 +160,36 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const isMovePhase = phase.startsWith('move')
   const isGameOver = phase === 'end'
 
-  // 存活/死亡
-  const alivePlayers = players.filter(p => p.status === 'alive')
-  const deadPlayers = players.filter(p => p.status === 'dead')
+  // 存活/死亡（useMemo：避免每次渲染全量重算，低配手机性能关键）
+  const alivePlayers = useMemo(() => players.filter(p => p.status === 'alive'), [players])
+  const deadPlayers = useMemo(() => players.filter(p => p.status === 'dead'), [players])
   // 真人生存数（就绪进度分母：空壳自动就绪，不参与计数）
-  const realAliveCount = alivePlayers.filter(p => !p.isBot).length
+  const realAliveCount = useMemo(() => alivePlayers.filter(p => !p.isBot).length, [alivePlayers])
   // 空壳存活数（调试用）
-  const botAliveCount = alivePlayers.filter(p => p.isBot).length
+  const botAliveCount = useMemo(() => alivePlayers.filter(p => p.isBot).length, [alivePlayers])
 
   // 同地点玩家
-  const sameLocationPlayers = currentPlayer
+  const sameLocationPlayers = useMemo(() => currentPlayer
     ? players.filter(p => p.id !== currentPlayer.id && p.locationId === currentPlayer.locationId && p.status === 'alive')
-    : []
-  const allAliveOthers = players.filter(p => p.id !== currentPlayer?.id && p.status === 'alive')
+    : [], [players, currentPlayer])
+  const allAliveOthers = useMemo(() => players.filter(p => p.id !== currentPlayer?.id && p.status === 'alive'), [players, currentPlayer?.id])
 
   // 可到达地点
-  const reachableLocations = currentPlayer
+  const reachableLocations = useMemo(() => currentPlayer
     ? getReachableLocations(locations, currentPlayer.locationId, 1)
-    : []
+    : [], [locations, currentPlayer?.locationId])
+
+  // 地图连线路径缓存（地图静态时 curvePath 结果不变，避免每次渲染全量重算 O(n²)）
+  const mapLinks = useMemo(() => {
+    return locations.flatMap((loc: any) =>
+      loc.connectedTo.map((connId: string) => {
+        if (connId <= loc.id) return null
+        const target = locations.find((l: any) => l.id === connId)
+        if (!target) return null
+        return { key: `${loc.id}_${connId}`, loc, target, d: curvePath(locations, loc, target) }
+      }).filter(Boolean)
+    )
+  }, [locations])
 
   // ── 初始化：等待服务器状态（服务器权威） ──
   useEffect(() => {
@@ -245,9 +257,9 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   // ── 点击的地点信息 ──
   const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
   const infoLocation = locations.find(l => l.id === infoLocationId)
-  const infoPlayers = infoLocation
+  const infoPlayers = useMemo(() => infoLocation
     ? players.filter(p => p.locationId === infoLocation.id && p.status === 'alive')
-    : []
+    : [], [players, infoLocation])
 
   // ── 重置交互 ──
   const resetInteraction = () => {
@@ -774,28 +786,22 @@ ${skill.description}`)
           <div className="flex-1 p-2 min-h-0 relative">
           {locations.length > 0 ? (
             <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-              {/* ── 连线 ── */}
-              {locations.map(loc =>
-                loc.connectedTo.map(connId => {
-                  if (connId <= loc.id) return null
-                  const target = locations.find(l => l.id === connId)
-                  if (!target) return null
-                  const isHighlighted = isMoveMode && reachableLocations.some(r =>
-                    (r.id === loc.id && currentPlayer?.locationId === target.id) ||
-                    (r.id === target.id && currentPlayer?.locationId === loc.id)
-                  )
-                  const d = curvePath(locations, loc, target)
-                  return (
-                    <path key={`${loc.id}_${connId}`}
-                      d={d}
-                      fill="none"
-                      stroke={isHighlighted ? '#818cf8' : '#334155'}
-                      strokeWidth={isHighlighted ? '1' : '0.6'}
-                      strokeDasharray={isHighlighted ? '1,1' : 'none'}
-                    />
-                  )
-                })
-              )}
+              {/* ── 连线（使用缓存的路径，避免每次渲染重算 curvePath）── */}
+              {mapLinks.map(({ key, loc, target, d }: any) => {
+                const isHighlighted = isMoveMode && reachableLocations.some(r =>
+                  (r.id === loc.id && currentPlayer?.locationId === target.id) ||
+                  (r.id === target.id && currentPlayer?.locationId === loc.id)
+                )
+                return (
+                  <path key={key}
+                    d={d}
+                    fill="none"
+                    stroke={isHighlighted ? '#818cf8' : '#334155'}
+                    strokeWidth={isHighlighted ? '1' : '0.6'}
+                    strokeDasharray={isHighlighted ? '1,1' : 'none'}
+                  />
+                )
+              })}
 
               {/* ── 地点 ── */}
               {locations.map(loc => {
@@ -814,9 +820,7 @@ ${skill.description}`)
                     {/* 移动模式高亮 */}
                     {isReachable && (
                       <circle cx={loc.x} cy={loc.y} r={6.5}
-                        fill="none" stroke="#818cf8" strokeWidth="1.2" opacity="0.7">
-                        <animate attributeName="r" values="6;7;6" dur="1.5s" repeatCount="indefinite" />
-                      </circle>
+                        fill="none" stroke="#818cf8" strokeWidth="1.2" opacity="0.7" />
                     )}
                     {/* 技能目标高亮 */}
                     {isTargetingMode && selectedSkill?.targetType === 'adjacent_location' && (
@@ -831,9 +835,7 @@ ${skill.description}`)
                     {/* 断路选点高亮 */}
                     {cutPair.length === 1 && cutPair[0] === loc.id && (
                       <circle cx={loc.x} cy={loc.y} r={5.5}
-                        fill="none" stroke="#dc2626" strokeWidth="1.5" opacity="0.8">
-                        <animate attributeName="r" values="5.5;6.5;5.5" dur="1s" repeatCount="indefinite" />
-                      </circle>
+                        fill="none" stroke="#dc2626" strokeWidth="1.5" opacity="0.8" />
                     )}
                     {/* 断路模式：显示可切断的道路 */}
                     {selectedSkill?.id === 'zhangyang_cut_connection' && currentPlayer && (
