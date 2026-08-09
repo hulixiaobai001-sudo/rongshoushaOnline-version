@@ -97,6 +97,11 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
   // 随机放置
   players.forEach(p => {
     p.locationId = locations[Math.floor(Math.random() * locations.length)].id;
+    // 出生在死人沼泽的杀手：直接获得额外攻击次数（movePlayer 的+1只在"进入"时触发，出生不算）
+    const bornLoc = locations.find(l => l.id === p.locationId);
+    if (bornLoc?.effect?.type === 'asylum_extra_attack' && p.identity === 'killer') {
+      p.asylumAttackRemaining = 1;
+    }
   });
 
   return {
@@ -249,11 +254,16 @@ function attackPlayer(game, attackerId, targetId) {
   const atkLoc = game.locations.find(l => l.id === atk.locationId);
   if (atkLoc?.effect?.type === 'no_attack') return { ok: false, msg: '【曼城·禁武】此地点禁止攻击' };
 
-  // 次数检查
+  // 次数检查（死人沼泽·多刀：额外攻击用完后仍可消耗常规攻击次数，共可刀2次）
   const inAsylum = atkLoc?.effect?.type === 'asylum_extra_attack';
   if (inAsylum) {
-    if (atk.asylumAttackRemaining <= 0) return { ok: false, msg: '本轮已攻击过' };
-    atk.asylumAttackRemaining--;
+    if (atk.asylumAttackRemaining > 0) {
+      atk.asylumAttackRemaining--;
+    } else if (atk.normalAttackRemaining > 0) {
+      atk.normalAttackRemaining--;
+    } else {
+      return { ok: false, msg: '本轮已攻击过' };
+    }
   } else {
     if (atk.normalAttackRemaining <= 0) return { ok: false, msg: '本轮已攻击过' };
     atk.normalAttackRemaining--;

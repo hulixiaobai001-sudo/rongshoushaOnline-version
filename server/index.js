@@ -634,11 +634,18 @@ wss.on('connection', (ws) => {
           case 'attack': {
             const result = useSkill(game, myGamePlayerId, 'basic_kill', payload.targetId);
             trackSkillUse(game, myGamePlayerId, 'basic_kill', result);
+            if (result && !result.ok && result.msg) {
+              wsSend(ws, { type: 'from_host', data: { type: 'private_info', text: '⚠️ ' + result.msg } });
+            }
             break;
           }
           case 'skill': {
             const result = useSkill(game, myGamePlayerId, payload.skillId, payload.targetId, payload.targetLocationId);
             trackSkillUse(game, myGamePlayerId, payload.skillId, result);
+            if (result && !result.ok && result.msg) {
+              // 技能/攻击失败：私发原因（此前静默拒绝，操作者完全不知道发生了什么）
+              wsSend(ws, { type: 'from_host', data: { type: 'private_info', text: '⚠️ ' + result.msg } });
+            }
             if (result && result.reveal) {
               // 探查结果私发
               wsSend(ws, { type: 'from_host', data: {
