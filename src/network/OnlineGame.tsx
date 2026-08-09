@@ -1249,11 +1249,26 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
     <div className="space-y-1 max-h-[100px] overflow-auto">
       {/* 追踪信息（标记后即显示，0 条记录也提示——目标还没行动） */}
       {trackedPlayer && (
-        <div>
-          <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}{trackedPlayer.isBot ? ' 🤖' : ''}</p>
-          <p className="text-[8px] text-slate-400">{trackRecords.length} 条记录{trackRecords.length === 0 ? '（等待对方行动）' : ''}</p>
+        <div className="bg-amber-900/20 border border-amber-800/30 rounded p-1.5">
+          <p className="text-[9px] text-amber-400 font-medium mb-0.5">📡 追踪: {trackedPlayer.name}{trackedPlayer.isBot ? ' 🤖' : ''} · {trackRecords.length} 条</p>
+          {/* 实时摘要：最新 2 条直接可见，不用点开弹窗 */}
+          {trackRecords.length > 0 && (
+            <div className="space-y-0.5 mb-0.5">
+              {trackRecords.slice(-2).reverse().map((r: any, i: number) => {
+                const loc = locations?.find((l: any) => l.id === r.locationId)
+                return (
+                  <p key={'tr_' + (trackRecords.length - i)} className="text-[8px] text-amber-200/80 truncate">
+                    {r.action}{loc ? ` · ${loc.name}` : ''}
+                  </p>
+                )
+              })}
+            </div>
+          )}
+          {trackRecords.length === 0 && (
+            <p className="text-[8px] text-slate-500 mb-0.5">等待对方行动...</p>
+          )}
           <button onClick={() => setShowTrack(true)}
-            className="text-[8px] text-amber-500 hover:text-amber-400 underline mt-0.5">
+            className="text-[8px] text-amber-500 hover:text-amber-400 underline">
             查看详细追踪报告 &gt;
           </button>
         </div>
