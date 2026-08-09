@@ -288,7 +288,7 @@ function attackPlayer(game, attackerId, targetId) {
 // 西部荒野·变异：在西部荒野死亡且为平民 → 死而复生变成杀手
 // （覆盖所有死亡路径：被刀/枪毙/投票出局）
 function tryTransform(game, player) {
-  if (player.status !== 'dead' || player.identity !== 'civilian') return false;
+  if ((player.status !== 'dead' && player.status !== 'dying') || player.identity !== 'civilian') return false;
   const loc = game.locations.find(l => l.id === player.locationId);
   if (loc?.effect?.type !== 'identity_transform') return false;
   player.status = 'alive';
@@ -296,6 +296,17 @@ function tryTransform(game, player) {
   player.isRevealed = false;
   addEvent(game, `【西部荒野·变异】${player.name} 死而复生！身份从平民转变为杀手！`);
   return true;
+}
+
+// 延迟死亡结算：所有人准备推进时，濒死(dying)玩家成为尸体
+// （西部荒野平民则复活变异成杀手，不死亡）
+function settleDeaths(game) {
+  game.players.filter(p => p.status === 'dying').forEach(p => {
+    if (tryTransform(game, p)) return; // 变异复活
+    p.status = 'dead';
+    p.isRevealed = true;
+    addEvent(game, `${p.name} 确认死亡（${p.identity === 'killer' ? '杀手' : '平民'}）`);
+  });
 }
 
 // ---------- 击杀核心 ----------
@@ -315,17 +326,15 @@ function killPlayer(game, targetId, attackerId) {
 
   // 功夫反弹
   if (game.kungFuActivePlayers.includes(targetId)) {
-    atk.status = 'dead';
-    atk.isRevealed = true;
-    addEvent(game, `【功夫反弹】${tgt.name} 反杀了 ${atk.name}！`);
+    atk.status = 'dying'; // 反弹：攻击者濒死（结算时死）
+    addEvent(game, `【功夫反弹】${tgt.name} 反杀了 ${atk.name}（濒死待结算）！`);
     checkEnd(game);
     return;
   }
 
-  // 击杀（封锁不在此时执行：死亡地点统一在投票阶段结束后封锁）
-  tgt.status = 'dead';
-  tgt.isRevealed = true;
-  addEvent(game, `${tgt.name}（${tgt.identity === 'killer' ? '杀手' : '平民'}）被 ${atk.name} 击杀`);
+  // 击杀 → 濒死（延迟死亡：不立即变尸体，等所有人准备推进时结算）
+  tgt.status = 'dying';
+  addEvent(game, `${tgt.name} 被 ${atk.name} 击杀（濒死待结算）`);
 
   // 西部荒野变异（封锁在投票结束后统一执行）
   if (tryTransform(game, tgt)) {
@@ -337,9 +346,8 @@ function killPlayer(game, targetId, attackerId) {
   if (tgtLoc?.effect?.type === 'mass_civilian_death') {
     game.players.filter(p => p.id !== tgt.id && p.locationId === tgt.locationId && p.status === 'alive' && p.identity === 'civilian')
       .forEach(civ => {
-        civ.status = 'dead';
-        civ.isRevealed = true;
-        addEvent(game, `【曼斯顿边境·连锁】${civ.name}（平民）受连锁反应影响死亡`);
+        civ.status = 'dying'; // 连锁：平民濒死（结算时死）
+        addEvent(game, `【曼斯顿边境·连锁】${civ.name}（平民）受连锁反应影响（濒死待结算）`);
       });
   }
 
@@ -348,8 +356,8 @@ function killPlayer(game, targetId, attackerId) {
 
 // ---------- 胜利判定 ----------
 function checkEnd(game) {
-  const killers = game.players.filter(p => p.status === 'alive' && p.identity === 'killer').length;
-  const civs = game.players.filter(p => p.status === 'alive' && p.identity === 'civilian').length;
+  const killers = game.players.filter(p => (p.status === 'alive' || p.status === 'dying') && p.identity === 'killer').length;
+  const civs = game.players.filter(p => (p.status === 'alive' || p.status === 'dying') && p.identity === 'civilian').length;
   if (killers === 0) {
     game.winner = 'good'; game.phase = 'end';
     addEvent(game, '🏆 好人阵营胜利！所有杀手已被消灭');
@@ -362,7 +370,7 @@ function checkEnd(game) {
   }
   // 兜底：所有真人玩家出局（调试模式的空壳不算真人，不会操作）
   // 空壳只是占位角色，不能当真人继续撑局 —— 真人全没了直接结束，避免卡死
-  const realAlive = game.players.filter(p => p.status === 'alive' && !p.isBot).length;
+  const realAlive = game.players.filter(p => (p.status === 'alive' || p.status === 'dying') && !p.isBot).length;
   if (realAlive === 0) {
     game.winner = civs > 0 ? 'good' : 'evil';
     game.phase = 'end';
@@ -540,7 +548,7 @@ function handleVoteEnd(game) {
   // 投票阶段结束 → 统一封锁本轮所有死亡地点（行动阶段被杀 + 投票出局）
   // （不在杀人时立即封锁，符合"投票结束后才封锁"的规则）
   const deathLocs = new Set(
-    game.players.filter(p => p.status === 'dead' && p.locationId).map(p => p.locationId)
+    game.players.filter(p => (p.status === 'dead' || p.status === 'dying') && p.locationId).map(p => p.locationId)
   );
   deathLocs.forEach(locId => blockLocation(game, locId));
   // 清理尸体
@@ -564,7 +572,7 @@ function handleVoteEnd(game) {
   game.phase = 'vote_result';
   // 兜底：投票后真人全灭（如调试模式房主被投死）→ 立即判定结束，
   // 否则 vote_result 阶段没有任何真人能点「下一轮」，游戏会卡死
-  const realAlive = game.players.filter(p => p.status === 'alive' && !p.isBot).length;
+  const realAlive = game.players.filter(p => (p.status === 'alive' || p.status === 'dying') && !p.isBot).length;
   if (realAlive === 0) checkEnd(game);
 }
 
@@ -592,5 +600,5 @@ function unblockLocation(game, locId) {
 
 export {
   createGame, serializeGame, nextPhase, movePlayer, attackPlayer,
-  useSkill, submitVotes, checkEnd, killPlayer, PHASE_NAMES,
+  useSkill, submitVotes, checkEnd, killPlayer, settleDeaths, PHASE_NAMES,
 };

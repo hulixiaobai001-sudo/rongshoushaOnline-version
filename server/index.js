@@ -1,5 +1,5 @@
 import { WebSocketServer } from 'ws';
-import { createGame, serializeGame, nextPhase, movePlayer, useSkill, submitVotes } from './gameEngine.js';
+import { createGame, serializeGame, nextPhase, movePlayer, useSkill, submitVotes, settleDeaths } from './gameEngine.js';
 import { createServer } from 'http';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
@@ -680,6 +680,7 @@ wss.on('connection', (ws) => {
             if (ws.isHost) {
               room.readySet = new Set();
               room.votes = [];
+              settleDeaths(game); // 房主手动推进也结算延迟死亡
               nextPhase(game);
             }
             break;
@@ -692,6 +693,8 @@ wss.on('connection', (ws) => {
         const allReady = aliveIds.length === 0 || aliveIds.every(id => room.readySet.has(id));
         if (allReady) {
           room.readySet = new Set();
+          // 延迟死亡结算：所有人准备后，濒死玩家成为尸体（变异复活除外）
+          settleDeaths(game);
           if (game.phase === 'vote') {
             submitVotes(game, room.votes);
             room.votes = [];

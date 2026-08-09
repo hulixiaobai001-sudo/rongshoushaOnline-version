@@ -140,7 +140,9 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
       : (store.myPlayerId ? players.find(p => p.id === store.myPlayerId) || null : null)
   // 死亡玩家自动进入观战视角
   const isDead = myPlayer && myPlayer.status === 'dead'
-  const currentPlayer = isDead ? null : myPlayer
+  // 濒死：延迟死亡结算前不能操作（服务器会拒绝），但不算死亡（不观战/不弹死亡提示）
+  const isDying = myPlayer && myPlayer.status === 'dying'
+  const currentPlayer = isDead || isDying ? null : myPlayer
   const hero = currentPlayer?.heroId ? getHeroById(currentPlayer.heroId) : null
 
   // ── 阶段信息 ──
@@ -167,6 +169,8 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const realAliveCount = useMemo(() => alivePlayers.filter(p => !p.isBot).length, [alivePlayers])
   // 空壳存活数（调试用）
   const botAliveCount = useMemo(() => alivePlayers.filter(p => p.isBot).length, [alivePlayers])
+  // 濒死人数（延迟死亡：待结算）
+  const dyingPlayers = useMemo(() => players.filter(p => p.status === 'dying'), [players])
 
   // 同地点玩家
   const sameLocationPlayers = useMemo(() => currentPlayer
@@ -263,7 +267,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const infoLocationId = selectedLocationId || currentPlayer?.locationId || ''
   const infoLocation = locations.find(l => l.id === infoLocationId)
   const infoPlayers = useMemo(() => infoLocation
-    ? players.filter(p => p.locationId === infoLocation.id && p.status === 'alive')
+    ? players.filter(p => p.locationId === infoLocation.id && (p.status === 'alive' || p.status === 'dying'))
     : [], [players, infoLocation])
 
   // ── 重置交互 ──
@@ -746,6 +750,11 @@ ${skill.description}`)
             <Heart className="w-3 h-3" />
             {alivePlayers.length}
           </span>
+          {dyingPlayers.length > 0 && (
+            <span className="text-[10px] text-red-400 flex items-center gap-0.5" title="濒死（待结算）">
+              💔{dyingPlayers.length}
+            </span>
+          )}
           {botAliveCount > 0 && (
             <span className="text-[10px] text-slate-400 flex items-center gap-0.5" title="空壳玩家">
               🤖{botAliveCount}
@@ -825,7 +834,7 @@ ${skill.description}`)
 
               {/* ── 地点 ── */}
               {locations.map(loc => {
-                const locPlayers = players.filter(p => p.locationId === loc.id && p.status === 'alive')
+                const locPlayers = players.filter(p => p.locationId === loc.id && (p.status === 'alive' || p.status === 'dying'))
                 const isCurrentLoc = locPlayers.some(p => p.id === currentPlayer?.id)
                 const isSelected = selectedLocationId === loc.id && !isCurrentLoc
                 // 传送激活时所有地点可达
@@ -933,8 +942,8 @@ ${skill.description}`)
                             }
                           }}>
                           <circle cx={px} cy={py} r={2.8}
-                            fill={isMe ? '#818cf8' : pHero?.color || '#6366f1'}
-                            stroke={isMe ? '#fff' : '#1e293b'} strokeWidth="0.5" />
+                            fill={p.status === 'dying' ? '#dc2626' : isMe ? '#818cf8' : pHero?.color || '#6366f1'}
+                            stroke={isMe ? '#fff' : p.status === 'dying' ? '#ef4444' : '#1e293b'} strokeWidth={p.status === 'dying' ? '1' : '0.5'} />
                           <text x={px} y={py + 1} textAnchor="middle"
                             fontSize="2.8" fill="white" fontWeight="bold"
                             style={{ pointerEvents: 'none', userSelect: 'none' }}>
