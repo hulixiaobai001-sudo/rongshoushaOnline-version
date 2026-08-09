@@ -501,8 +501,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
       // 普通攻击（杀手通用）
       case 'basic_kill':
         if (targetPlayerId) {
-          // 服务器权威：攻击由服务器执行
-          setHasAttacked(true)
+          // 服务器权威：攻击由服务器执行（次数由服务器剩余次数控制）
           const target = players.find(p => p.id === targetPlayerId)
           info('🔪 攻击已发出', `对 ${target?.name || '目标'} 发起攻击，等待结算...`)
         }
