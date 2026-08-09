@@ -61,6 +61,18 @@ function shuffle(arr) {
   return a;
 }
 
+// 死人沼泽·多刀：存活的杀手只要身处死人沼泽且没有额外攻击次数，就补 1 刀
+// （覆盖移动进入/出生/投票重排/随机放置所有场景，避免"没刀就没刀了"）
+function grantAsylumIfInMarsh(game) {
+  const marsh = game.locations.find(l => l.effect?.type === 'asylum_extra_attack');
+  if (!marsh) return;
+  game.players.forEach(p => {
+    if (p.identity === 'killer' && p.status === 'alive' && p.locationId === marsh.id && p.asylumAttackRemaining < 1) {
+      p.asylumAttackRemaining = 1;
+    }
+  });
+}
+
 // ---------- 创建游戏 ----------
 function createGame({ hostName, players: names, killerCount, botNames = [] }) {
   const total = names.length;
@@ -97,14 +109,9 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
   // 随机放置
   players.forEach(p => {
     p.locationId = locations[Math.floor(Math.random() * locations.length)].id;
-    // 出生在死人沼泽的杀手：直接获得额外攻击次数（movePlayer 的+1只在"进入"时触发，出生不算）
-    const bornLoc = locations.find(l => l.id === p.locationId);
-    if (bornLoc?.effect?.type === 'asylum_extra_attack' && p.identity === 'killer') {
-      p.asylumAttackRemaining = 1;
-    }
   });
 
-  return {
+  const game = {
     phase: 'action1', round: 1, winner: null,
     players, locations,
     blockedLocations: [], cutConnections: [],
@@ -116,6 +123,9 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
     droneLocationId: null, dronePlayerId: null, droneRound: 0,
     events: [],
   };
+  // 出生在死人沼泽的杀手：直接补额外攻击次数（movePlayer 只在移动进入时触发）
+  grantAsylumIfInMarsh(game);
+  return game;
 }
 
 // ---------- 序列化（玩家视角，隐藏身份） ----------
@@ -175,6 +185,8 @@ function nextPhase(game) {
         if (av.length) p.locationId = av[Math.floor(Math.random() * av.length)].id;
       }
     });
+    // 随机放置/重排后：身处死人沼泽的杀手补额外攻击次数
+    grantAsylumIfInMarsh(game);
     game.phase = 'action1';
     addEvent(game, `进入第${game.round}轮，行动阶段①`);
     return;
@@ -526,6 +538,8 @@ function handleVoteEnd(game) {
     if (p.halted) p.halted = false;
     if (p.identity === 'killer') { p.normalAttackRemaining = 1; p.asylumAttackRemaining = 0; }
   });
+  // 重排/重置后：身处死人沼泽的杀手补额外攻击（覆盖"被随机重排到死人沼泽"场景）
+  grantAsylumIfInMarsh(game);
   game.locationVisits = {};
   game.trackedPlayerId = null; game.trackerPlayerId = null; game.trackRecords = [];
   game.droneLocationId = null; game.dronePlayerId = null;
