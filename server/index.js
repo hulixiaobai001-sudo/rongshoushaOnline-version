@@ -434,9 +434,13 @@ wss.on('connection', (ws) => {
           wsSend(ws, { type: 'error', message: '房间不存在' });
           return;
         }
+        const isSpectator = !!msg.isSpectator;
         if (room.gameStarted) {
-          wsSend(ws, { type: 'error', message: '游戏已开始，无法加入' });
-          return;
+          // 游戏进行中：普通玩家拒绝加入，观战者放行（可立即观看当前对局）
+          if (!isSpectator) {
+            wsSend(ws, { type: 'error', message: '游戏已开始，无法加入' });
+            return;
+          }
         }
         if (room.players.size + 1 >= room.maxPlayers) {
           wsSend(ws, { type: 'error', message: '房间已满' });
@@ -444,7 +448,6 @@ wss.on('connection', (ws) => {
         }
         const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
         const name = String(msg.playerName || '玩家').slice(0, 20);
-        const isSpectator = !!msg.isSpectator;
         ws.playerId = playerId;
         ws.roomId = roomId;
         ws.isHost = false;
@@ -459,6 +462,13 @@ wss.on('connection', (ws) => {
           if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name, isSpectator });
         });
         syncRoomListToRoom(room);
+        // 游戏进行中：观战者立即加载当前对局（viewerId=null → 无身份，纯观战）
+        if (room.gameStarted && room.game) {
+          wsSend(ws, { type: 'from_host', data: { type: 'game_started' } });
+          const st = serializeGame(room.game, null);
+          st.readyCount = getReadyCount(room);
+          wsSend(ws, { type: 'from_host', data: { type: 'game_init', state: st } });
+        }
         break;
       }
 
