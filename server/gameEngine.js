@@ -285,6 +285,19 @@ function attackPlayer(game, attackerId, targetId) {
   return { ok: true };
 }
 
+// 西部荒野·变异：在西部荒野死亡且为平民 → 死而复生变成杀手
+// （覆盖所有死亡路径：被刀/枪毙/投票出局）
+function tryTransform(game, player) {
+  if (player.status !== 'dead' || player.identity !== 'civilian') return false;
+  const loc = game.locations.find(l => l.id === player.locationId);
+  if (loc?.effect?.type !== 'identity_transform') return false;
+  player.status = 'alive';
+  player.identity = 'killer';
+  player.isRevealed = false;
+  addEvent(game, `【西部荒野·变异】${player.name} 死而复生！身份从平民转变为杀手！`);
+  return true;
+}
+
 // ---------- 击杀核心 ----------
 function killPlayer(game, targetId, attackerId) {
   const tgt = game.players.find(x => x.id === targetId);
@@ -305,24 +318,17 @@ function killPlayer(game, targetId, attackerId) {
     atk.status = 'dead';
     atk.isRevealed = true;
     addEvent(game, `【功夫反弹】${tgt.name} 反杀了 ${atk.name}！`);
-    blockLocation(game, atk.locationId); // 攻击者死亡 → 封锁其所在地点
     checkEnd(game);
     return;
   }
 
-  // 击杀
+  // 击杀（封锁不在此时执行：死亡地点统一在投票阶段结束后封锁）
   tgt.status = 'dead';
   tgt.isRevealed = true;
   addEvent(game, `${tgt.name}（${tgt.identity === 'killer' ? '杀手' : '平民'}）被 ${atk.name} 击杀`);
-  blockLocation(game, tgt.locationId); // 死亡地点本轮封锁
 
-  // 西部荒野变异
-  if (tgtLoc?.effect?.type === 'identity_transform' && tgt.identity === 'civilian') {
-    tgt.status = 'alive';
-    tgt.identity = 'killer';
-    tgt.isRevealed = false;
-    unblockLocation(game, tgt.locationId); // 死而复生 → 撤销封锁
-    addEvent(game, `【西部荒野·变异】${tgt.name} 死而复生！身份从平民转变为杀手！`);
+  // 西部荒野变异（封锁在投票结束后统一执行）
+  if (tryTransform(game, tgt)) {
     checkEnd(game);
     return;
   }
@@ -439,8 +445,12 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       if (t.id === p.id) return { ok: false, msg: '不能枪毙自己' };
       markUsed(game, playerId, skillId);
       t.status = 'dead'; t.isRevealed = true;
-      blockLocation(game, t.locationId); // 枪毙同样立即封锁死亡地点
       addEvent(game, `【枪毙】${p.name} 枪决了 ${t.name}（${t.identity === 'killer' ? '杀手' : '平民'}）`);
+      // 西部荒野变异：枪毙在西部荒野的平民同样死而复生变杀手
+      if (tryTransform(game, t)) {
+        checkEnd(game);
+        return { ok: true };
+      }
       if (t.identity === 'civilian') {
         p.status = 'dead'; p.isRevealed = true;
         addEvent(game, `【枪毙】${p.name} 误杀好人，陪葬！`);
@@ -523,9 +533,16 @@ function handleVoteEnd(game) {
     game.players.filter(p => p.voteCount === maxVotes && p.status === 'alive').forEach(p => {
       p.status = 'dead'; p.isRevealed = true;
       addEvent(game, `${p.name} 被投票出局（${p.identity === 'killer' ? '杀手' : '平民'}）`);
-      blockLocation(game, p.locationId); // 投票出局者也封锁其地点
     });
   }
+  // 西部荒野变异：投票出局在西部荒野的平民同样死而复生变杀手（先于尸体清理）
+  game.players.forEach(p => { if (p.status === 'dead') tryTransform(game, p); });
+  // 投票阶段结束 → 统一封锁本轮所有死亡地点（行动阶段被杀 + 投票出局）
+  // （不在杀人时立即封锁，符合"投票结束后才封锁"的规则）
+  const deathLocs = new Set(
+    game.players.filter(p => p.status === 'dead' && p.locationId).map(p => p.locationId)
+  );
+  deathLocs.forEach(locId => blockLocation(game, locId));
   // 清理尸体
   game.players.forEach(p => { if (p.status === 'dead') p.locationId = ''; });
   // 存活重排
