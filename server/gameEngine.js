@@ -439,6 +439,7 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       if (t.id === p.id) return { ok: false, msg: '不能枪毙自己' };
       markUsed(game, playerId, skillId);
       t.status = 'dead'; t.isRevealed = true;
+      blockLocation(game, t.locationId); // 枪毙同样立即封锁死亡地点
       addEvent(game, `【枪毙】${p.name} 枪决了 ${t.name}（${t.identity === 'killer' ? '杀手' : '平民'}）`);
       if (t.identity === 'civilian') {
         p.status = 'dead'; p.isRevealed = true;

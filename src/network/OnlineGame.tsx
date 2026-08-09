@@ -384,6 +384,21 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const handleSkillClick = (skill: HeroSkill) => {
     // 检查是否为移动阶段技能
     if (isMovePhase && MOVE_SKILL_IDS.includes(skill.id)) {
+      // 次数检查（此前移动阶段技能直接触发，跳过了每轮一次的检查 → 前端看起来"无限"）
+      if (skill.limit === 'once_per_game') {
+        const usedSkillIds = usedSkills[currentPlayer?.id || ''] || []
+        if (usedSkillIds.includes(skill.id)) {
+          info('已使用', `【${skill.name}】每局仅能使用一次`)
+          return
+        }
+      }
+      if (skill.limit === 'once_per_round') {
+        const usedThisRound = (roundSkillUsage?.[currentPlayer?.id || '']?.[skill.id]) || 0
+        if (usedThisRound >= (skill.maxUses || 1)) {
+          info('已使用', `【${skill.name}】每轮仅能使用${skill.maxUses || 1}次`)
+          return
+        }
+      }
       // 移动阶段技能在左下角点击时触发
       handleMoveSkill(skill)
       return
