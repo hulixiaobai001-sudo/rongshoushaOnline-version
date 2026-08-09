@@ -213,14 +213,19 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
           }
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
           if (!store.myPlayerId && !isSpectator) {
-            // 优先用本地记录的 playerId（防 find 匹配到已死亡暴露的其他玩家导致身份错乱）
-            const savedId = (() => { try { return localStorage.getItem('rs_my_player_id') } catch { return null } })()
-            const me = savedId
-              ? msg.state.players.find((p: any) => p.id === savedId && (p.identity === 'killer' || p.identity === 'civilian'))
-              : msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
-            if (me) {
+            // 房主固定认 players[0]（房主没有 your_role 消息，此前 myPlayerId 一直为空
+            // 导致死亡检测失效、观战视角异常——"杀手和平民一起死"的元凶之一）
+            let me = isHost ? msg.state.players[0] : null
+            if (!me) {
+              const savedId = (() => { try { return localStorage.getItem('rs_my_player_id') } catch { return null } })()
+              me = savedId
+                ? msg.state.players.find((p: any) => p.id === savedId && (p.identity === 'killer' || p.identity === 'civilian'))
+                : msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
+            }
+            if (me && (me.identity === 'killer' || me.identity === 'civilian')) {
               store.setMyInfo(me.id, me.identity)
               if (me.heroId) store.setPlayerHero(me.id, me.heroId)
+              try { localStorage.setItem('rs_my_player_id', me.id) } catch {}
             }
           }
         }
@@ -1127,7 +1132,7 @@ ${skill.description}`)
           )}
           {/* 左：技能区 */}
           <div className="flex-1 min-w-0">
-            {!isSpectator && availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
+            {!isSpectator && !isDead && availableSkills.length > 0 && !isMoveMode && !isTargetingMode && (
               <div className="flex flex-wrap items-center gap-1">
                 <button onClick={() => setSkillsOpen(!skillsOpen)}
                   className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 px-1.5 py-1 rounded hover:bg-slate-700/50 transition-colors">
@@ -1179,7 +1184,7 @@ ${skill.description}`)
           )}
 
           {/* 中：移动按钮 */}
-          {!isSpectator && isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
+          {!isSpectator && !isDead && isMovePhase && !isMoveMode && !isTargetingMode && !isGameOver && (
             <button onClick={handleMoveClick}
               disabled={hasMoved && !currentPlayer?.doubleMoveActive}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
@@ -1198,7 +1203,7 @@ ${skill.description}`)
           )}
 
           {/* 右：准备/就绪按钮 */}
-          {!isSpectator && !isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
+          {!isSpectator && !isDead && !isGameOver && !phase.startsWith('vote') && phase !== 'vote_result' && phase !== 'death_report' && (
             <button onClick={handleReady}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${
                 myReady ? 'bg-emerald-700 text-emerald-200' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
