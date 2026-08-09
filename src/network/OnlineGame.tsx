@@ -201,7 +201,11 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
           }
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
           if (!store.myPlayerId && !isSpectator) {
-            const me = msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
+            // 优先用本地记录的 playerId（防 find 匹配到已死亡暴露的其他玩家导致身份错乱）
+            const savedId = (() => { try { return localStorage.getItem('rs_my_player_id') } catch { return null } })()
+            const me = savedId
+              ? msg.state.players.find((p: any) => p.id === savedId && (p.identity === 'killer' || p.identity === 'civilian'))
+              : msg.state.players.find((p: any) => p.identity === 'killer' || p.identity === 'civilian')
             if (me) {
               store.setMyInfo(me.id, me.identity)
               if (me.heroId) store.setPlayerHero(me.id, me.heroId)
@@ -213,6 +217,7 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
         if (msg.heroId && msg.heroId !== '') {
           store.setPlayerHero(msg.playerId, msg.heroId)
         }
+        try { localStorage.setItem('rs_my_player_id', msg.playerId) } catch {}
       } else if (msg.type === 'private_info') {
         setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
       }

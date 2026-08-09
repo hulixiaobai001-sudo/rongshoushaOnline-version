@@ -426,6 +426,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       // 保存房间信息到localStorage（防刷新）
       localStorage.setItem('rs_room_code', inputCode.trim())
       localStorage.setItem('rs_room_role', 'player')
+      // 清空本地玩家数据（防止多次进出房间后 store.players 累积成 20+ 人）
+      store.resetGame()
       setMode('join')
       setRoomCode(room.roomId)
       setStatus('已加入房间，等待房主开始游戏...')
@@ -460,6 +462,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setInGame(false)
     setBotPlayerNames([])
     setSpectatorIds([])
+    // 清空本地玩家数据（防止累积）
+    store.resetGame()
     // 清除防刷新数据
     localStorage.removeItem('rs_room_code')
     localStorage.removeItem('rs_room_role')
