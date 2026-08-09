@@ -11,10 +11,26 @@ const handlers: Record<string, NetHandler[]> = {}
 let ws: WebSocket | null = null
 let connected = false
 let myState = { isHost: false, roomId: '', playerId: '', playerName: '', isSpectator: false }
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
 function getWsUrl(): string {
   const base = window.location.origin
   return base.replace(/^http/, 'ws') + '/'
+}
+
+// 断线自动重连（玩家角色；房主断线=服务器解散房间，无法恢复）
+function scheduleReconnect() {
+  if (myState.isHost || !myState.roomId) return
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  reconnectTimer = setTimeout(() => {
+    if (myState.isHost || !myState.roomId) return
+    openSocket()
+      .then(() => {
+        // 重新加入房间（服务器：游戏中按名字恢复角色映射并立即回游戏）
+        send({ type: 'room_join', roomId: myState.roomId, playerName: myState.playerName, isSpectator: myState.isSpectator })
+      })
+      .catch(() => scheduleReconnect())
+  }, 1500)
 }
 
 function openSocket(): Promise<void> {
@@ -31,7 +47,10 @@ function openSocket(): Promise<void> {
       return
     }
     ws.onopen = () => { connected = true; resolve() }
-    ws.onclose = () => { connected = false }
+    ws.onclose = () => {
+      connected = false
+      scheduleReconnect() // 断线自动重连（玩家）
+    }
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data)
@@ -213,6 +232,7 @@ export function netGetState() {
 
 /** 断开连接 */
 export function netDisconnect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   try { netLeaveRoom() } catch { /* ignore */ }
   if (ws) { try { ws.close() } catch { /* ignore */ } }
   ws = null

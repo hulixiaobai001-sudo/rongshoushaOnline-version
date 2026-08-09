@@ -435,19 +435,24 @@ wss.on('connection', (ws) => {
           return;
         }
         const isSpectator = !!msg.isSpectator;
+        const name = String(msg.playerName || '玩家').slice(0, 20);
+        let isRejoin = false;
         if (room.gameStarted) {
-          // 游戏进行中：普通玩家拒绝加入，观战者放行（可立即观看当前对局）
+          // 游戏进行中：观战者放行（立即观战）；普通玩家仅允许"重连"（名字匹配游戏角色）
           if (!isSpectator) {
-            wsSend(ws, { type: 'error', message: '游戏已开始，无法加入' });
-            return;
+            const gp = room.game?.players.find(p => p.name === name);
+            if (!gp) {
+              wsSend(ws, { type: 'error', message: '游戏已开始，无法加入' });
+              return;
+            }
+            isRejoin = true; // 重连：角色已在游戏中，不占新名额
           }
         }
-        if (room.players.size + 1 >= room.maxPlayers) {
+        if (!isRejoin && room.players.size + 1 >= room.maxPlayers) {
           wsSend(ws, { type: 'error', message: '房间已满' });
           return;
         }
         const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
-        const name = String(msg.playerName || '玩家').slice(0, 20);
         ws.playerId = playerId;
         ws.roomId = roomId;
         ws.isHost = false;
@@ -462,10 +467,14 @@ wss.on('connection', (ws) => {
           if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name, isSpectator });
         });
         syncRoomListToRoom(room);
-        // 游戏进行中：观战者立即加载当前对局（viewerId=null → 无身份，纯观战）
+        // 游戏进行中：重连玩家恢复角色映射并立即回到游戏；观战者立即观战
         if (room.gameStarted && room.game) {
+          const gp = isRejoin ? room.game.players.find(p => p.name === name) : null;
+          if (gp) {
+            room.gamePlayerMap.set(playerId, gp.id); // 恢复映射（断线重连）
+          }
           wsSend(ws, { type: 'from_host', data: { type: 'game_started' } });
-          const st = serializeGame(room.game, null);
+          const st = serializeGame(room.game, gp ? gp.id : null);
           st.readyCount = getReadyCount(room);
           wsSend(ws, { type: 'from_host', data: { type: 'game_init', state: st } });
         }
