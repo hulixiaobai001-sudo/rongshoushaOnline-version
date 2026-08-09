@@ -302,11 +302,12 @@ function tryTransform(game, player) {
 // （西部荒野平民则复活变异成杀手，不死亡）
 function settleDeaths(game) {
   game.players.filter(p => p.status === 'dying').forEach(p => {
-    if (tryTransform(game, p)) return; // 变异复活
+    if (tryTransform(game, p)) return; // 变异复活（延迟变异）
     p.status = 'dead';
     p.isRevealed = true;
     addEvent(game, `${p.name} 确认死亡（${p.identity === 'killer' ? '杀手' : '平民'}）`);
   });
+  checkEnd(game); // 结算后立即判定胜负（避免多跑几个阶段才结束）
 }
 
 // ---------- 击杀核心 ----------
@@ -332,17 +333,11 @@ function killPlayer(game, targetId, attackerId) {
     return;
   }
 
-  // 击杀 → 濒死（延迟死亡：不立即变尸体，等所有人准备推进时结算）
+  // 击杀 → 濒死（延迟死亡：不立即变尸体/变异，等所有人准备推进时 settleDeaths 结算）
   tgt.status = 'dying';
   addEvent(game, `${tgt.name} 被 ${atk.name} 击杀（濒死待结算）`);
 
-  // 西部荒野变异（封锁在投票结束后统一执行）
-  if (tryTransform(game, tgt)) {
-    checkEnd(game);
-    return;
-  }
-
-  // 曼斯顿边境连锁
+  // 曼斯顿边境连锁（被刀者濒死 → 连锁平民也濒死，结算时统一变尸体/变异）
   if (tgtLoc?.effect?.type === 'mass_civilian_death') {
     game.players.filter(p => p.id !== tgt.id && p.locationId === tgt.locationId && p.status === 'alive' && p.identity === 'civilian')
       .forEach(civ => {
