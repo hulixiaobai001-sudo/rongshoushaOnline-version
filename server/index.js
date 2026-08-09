@@ -346,7 +346,7 @@ function syncRoomListToRoom(room) {
 function memberList(room) {
   const list = [{ id: room.hostId, name: room.hostName, isHost: true }];
   room.players.forEach((p, pid) => {
-    list.push({ id: pid, name: p.name, isHost: false });
+    list.push({ id: pid, name: p.name, isHost: false, isSpectator: !!p.isSpectator });
   });
   return list;
 }

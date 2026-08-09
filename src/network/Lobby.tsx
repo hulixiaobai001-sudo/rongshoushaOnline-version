@@ -211,6 +211,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [debugMode, setDebugMode] = useState(false)
   const [inGame, setInGame] = useState(false)
   const [botPlayerNames, setBotPlayerNames] = useState<string[]>([])
+  const [spectatorIds, setSpectatorIds] = useState<string[]>([])
   const connectingRef = useRef(false)
   const roomHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -246,6 +247,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
         if (!prev.includes(msg.playerId)) return [...prev, msg.playerId]
         return prev
       })
+      if (msg.isSpectator) {
+        setSpectatorIds((prev: string[]) => prev.includes(msg.playerId) ? prev : [...prev, msg.playerId])
+      }
       // 联机玩家同步到房间设置面板（可配置身份/角色）
       if (msg.name && msg.name !== '连接中...') {
         const exist = store.players.find((p: any) => p.name === msg.name)
@@ -267,6 +271,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     })
     netOn('playerLeave', (msg: any) => {
       setPlayers((prev: string[]) => prev.filter((id: string) => id !== msg.playerId))
+      setSpectatorIds((prev: string[]) => prev.filter((id: string) => id !== msg.playerId))
       // 从房间设置面板移除（按名字，房主保留）
       if (msg.name && msg.name !== '连接中...') {
         const target = store.players.find((p: any) => p.name === msg.name)
@@ -284,6 +289,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     netOn('members', (members: any[]) => {
       const others = (members || []).filter((m: any) => !m.isHost)
       setPlayers(others.map((m: any) => m.id))
+      setSpectatorIds(others.filter((m: any) => m.isSpectator).map((m: any) => m.id))
       const namesMap: Record<string, string> = {}
       others.forEach((m: any) => { namesMap[m.id] = m.name })
       setPlayerNames(prev => ({ ...prev, ...namesMap }))
@@ -424,6 +430,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setDebugMode(false)
     setInGame(false)
     setBotPlayerNames([])
+    setSpectatorIds([])
     // 清除防刷新数据
     localStorage.removeItem('rs_room_code')
     localStorage.removeItem('rs_room_role')
@@ -472,8 +479,15 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const handleStartGame = () => {
     // 服务器权威：服务器创建游戏（调试模式带空壳玩家 + 调试台配置）
     if (debugMode) {
-      // 空壳名单：与房间玩家列表一致（botPlayerNames）
-      const bots = [...botPlayerNames]
+      // 自动补空壳：没填充过就现场生成（防止"只有房主一人"开局）
+      // 原版是固定塞3个，这里补满到8人（含房主），单人调试 = 房主+7空壳
+      let bots = [...botPlayerNames]
+      if (bots.length === 0) {
+        const existingCount = players.filter(p => !p.startsWith('bot_')).length
+        const needed = Math.max(0, 8 - existingCount - 1)
+        bots = Array.from({ length: needed }, (_, i) => `空壳玩家${i + 1}`)
+        enterDebugMode() // 同步刷新本地玩家列表/调试台显示
+      }
       // 调试台配置：store.players 的身份/英雄（含空壳，按名字匹配服务器）
       const configs = store.players.map((p: any) => ({ name: p.name, identity: p.identity, heroId: p.heroId }))
       netGameStart(bots, configs)
@@ -703,6 +717,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
                           }`}>
                           <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold shrink-0">{i + 2}</span>
                           <span>玩家名：{name}</span>
+                          {spectatorIds.includes(id) && <span className="text-[9px] text-purple-400/70 ml-1">👁️观战</span>}
                           {isBot && <span className="text-[9px] text-amber-600/60 ml-auto">空壳</span>}
                         </div>
                       )
