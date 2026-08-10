@@ -1,21 +1,88 @@
-MIT License
+═══════════════════════════════════════════════════════════
+自定义许可协议 / Custom License
+保留一切权利 / All Rights Reserved
+═══════════════════════════════════════════════════════════
 
-Copyright (c) 2026 greensaywell
+Copyright (c) 2026 作者 / The Author
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+───────────────────────────────────────────────────────────
+一、权利保留 / Rights Reserved
+───────────────────────────────────────────────────────────
+本软件及其全部内容（包括但不限于源代码、美术资源、音频、
+文字、名称、形象设计等）的著作权归作者所有，作者保留一切权利。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+【EN】The author retains all rights to this software and all of its
+contents, including but not limited to source code, art assets, audio,
+text, names, and character designs.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+───────────────────────────────────────────────────────────
+二、授权范围 / Scope of License
+───────────────────────────────────────────────────────────
+在未获得作者明确许可之前，任何个人或组织不得以任何形式使用、
+复制、修改、分发、传播、展示本软件及其任何部分。
+
+【EN】No individual or organization may use, copy, modify, distribute,
+transmit, or display this software or any part of it in any form
+without the author's explicit permission.
+
+───────────────────────────────────────────────────────────
+三、明确禁止 / Prohibitions
+───────────────────────────────────────────────────────────
+1. 禁止商业用途：不得将本软件或其衍生内容用于任何商业目的
+   （包括但不限于出售、收费托管、广告/流量变现、企业内使用、
+   付费订阅）。
+
+   【EN】Commercial use is prohibited: the software or any derivative
+   thereof may not be used for any commercial purpose (including but
+   not limited to selling, paid hosting, advertising/monetization,
+   in-enterprise use, or paid subscription).
+
+2. 禁止二次创作：不得对本软件进行改编、翻译、重构、制作衍生
+   作品（包括但不限于换皮、续作、素材提取再利用）。
+
+   【EN】Derivative works are prohibited: no adaptation, translation,
+   refactoring, or derivative creation (including but not limited to
+   reskins, sequels, or asset extraction and reuse).
+
+3. 禁止未经授权的所有用途：除作者明确许可外的一切使用行为均
+   被禁止。
+
+   【EN】All unauthorized uses are prohibited: any use without the
+   author's explicit permission is forbidden.
+
+───────────────────────────────────────────────────────────
+四、特别授权 / Special Permissions
+───────────────────────────────────────────────────────────
+以下情况无需单独申请：
+
+1. 个人学习与研究：可阅读、学习本软件代码，但不得传播修改后
+   的版本。
+
+   【EN】Personal study and research: reading and studying the source
+   code is permitted, but modified versions may not be distributed.
+
+2. 官方体验：仅限通过作者官方部署的服务器体验游戏。
+
+   【EN】Official play: playing the game is permitted only through the
+   author's officially deployed servers.
+
+───────────────────────────────────────────────────────────
+五、免责声明 / Disclaimer
+───────────────────────────────────────────────────────────
+本软件按「原样」提供，作者不对其可用性、完整性作任何保证，
+因使用本软件产生的任何损失，作者不承担责任。
+
+【EN】The software is provided "AS IS" without warranty of any kind.
+The author makes no warranties regarding its availability or
+completeness and shall not be liable for any loss arising from
+its use.
+
+───────────────────────────────────────────────────────────
+六、授权申请 / License Requests
+───────────────────────────────────────────────────────────
+如需任何形式的授权，请联系作者。未获许可的使用即构成侵权，
+作者保留追究法律责任的权利。
+
+【EN】For any form of licensing, please contact the author.
+Unauthorized use constitutes infringement, and the author reserves
+the right to pursue legal action.

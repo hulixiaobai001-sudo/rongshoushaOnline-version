@@ -1,3 +1,11 @@
+# 绒兽杀（联机版）
+
+> ⚠️ **许可声明 / License Notice**：本项目采用**自定义许可协议（保留一切权利）**，非 MIT 开源。未经作者授权，禁止商用、二次创作及一切未经许可的使用，详见 [LICENSE](./LICENSE)。
+>
+> ⚠️ **Custom License (All Rights Reserved)** — not open source. Commercial use, derivative works, and all unauthorized uses are prohibited without the author's permission. See [LICENSE](./LICENSE).
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
