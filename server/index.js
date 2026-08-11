@@ -17,9 +17,6 @@ const rooms = new Map(); // roomId -> { hostId, hostName, playerCount, maxPlayer
 const roomHistory = [];   // 对局历史（创建/结束记录）
 const adminTokens = new Map(); // token -> expiry
 const ADMIN_PASSWORD = '柯基不爱喝茶';
-// 外部系统对接（对局结束自动上报战绩）
-const EXTERNAL_URL = (process.env.EXTERNAL_URL || '').replace(/\/$/, '');
-const MATCH_TOKEN = process.env.MATCH_TOKEN || 'match_token_dev';
 // 可用英雄池（与 gameEngine.HERO_POOL 一致）
 const HERO_SET = new Set(['xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun']);
 // 技能名映射（玛丽追踪记录用）
@@ -372,31 +369,6 @@ function trackSkillUse(game, actorId, skillId, result) {
     action: `使用了【${name}】`,
     locationId: p ? p.locationId : '',
   });
-}
-
-// 对局结束 → 上报战绩到外部系统（榜单/胜率数据源）
-function reportMatch(room) {
-  const game = room.game;
-  if (!game || !game.winner || room.reported) return;
-  room.reported = true; // 防重复上报
-  if (!EXTERNAL_URL) return; // 未配置外部系统则跳过
-  const matches = game.players
-    .filter(p => !p.isBot) // 只上报真人玩家
-    .map(p => ({
-      roomId: room.roomId,
-      playerName: p.name,
-      identity: p.identity === 'killer' ? 'killer' : 'civilian',
-      isWinner: (p.identity === 'killer' && game.winner === 'evil') || (p.identity === 'civilian' && game.winner === 'good'),
-      heroId: p.heroId,
-      killCount: p.killCount || 0,
-      died: p.status !== 'alive' && p.status !== 'dying',
-    }));
-  if (matches.length === 0) return;
-  fetch(EXTERNAL_URL + '/api/matches', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-match-token': MATCH_TOKEN },
-    body: JSON.stringify({ matches }),
-  }).catch(() => { /* 上报失败不影响游戏 */ });
 }
 
 wss.on('connection', (ws) => {
@@ -752,8 +724,6 @@ wss.on('connection', (ws) => {
           st.readyCount = getReadyCount(room);
           wsSend(p.ws, { type: 'from_host', data: { type: 'sync', state: st } });
         });
-        // 对局结束：自动上报战绩到外部系统（排行榜/胜率数据源）
-        if (game.phase === 'end' && game.winner) reportMatch(room);
         break;
       }
 
