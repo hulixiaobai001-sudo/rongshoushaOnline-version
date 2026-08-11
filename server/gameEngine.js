@@ -85,6 +85,7 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
     halted: false, teleportReady: false, doubleMoveActive: false, doubleMoveFirstDone: false,
     normalAttackRemaining: 1, asylumAttackRemaining: 0,
     votedFor: null, voteCount: 0,
+    killCount: 0, // 击杀数（对局上报用）
     isBot: botNames.includes(n),
   }));
 
@@ -138,6 +139,7 @@ function serializeGame(game, viewerId) {
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed, votedFor: p.votedFor,
       isBot: !!p.isBot, // 空壳标记：前端据此区分真假玩家
+      killCount: p.killCount || 0,
       normalAttackRemaining: p.normalAttackRemaining, asylumAttackRemaining: p.asylumAttackRemaining,
       // 身份：只给本人或已暴露（死亡/枪毙）；对局结束后（end/winner）全体公开用于结算展示
       identity: (p.id === viewerId || p.isRevealed || game.phase === 'end' || game.winner) ? p.identity : undefined,
@@ -330,6 +332,7 @@ function killPlayer(game, targetId, attackerId) {
   // 功夫反弹
   if (game.kungFuActivePlayers.includes(targetId)) {
     atk.status = 'dying'; // 反弹：攻击者濒死（结算时死）
+    tgt.killCount = (tgt.killCount || 0) + 1; // 反杀计入击杀
     addEvent(game, `【功夫反弹】${tgt.name} 反杀了 ${atk.name}（濒死待结算）！`);
     checkEnd(game);
     return;
@@ -337,6 +340,7 @@ function killPlayer(game, targetId, attackerId) {
 
   // 击杀 → 濒死（延迟死亡：不立即变尸体/变异，等所有人准备推进时 settleDeaths 结算）
   tgt.status = 'dying';
+  atk.killCount = (atk.killCount || 0) + 1; // 击杀数（对局上报）
   addEvent(game, `${tgt.name} 被 ${atk.name} 击杀（濒死待结算）`);
 
   // 曼斯顿边境连锁（被刀者濒死 → 连锁平民也濒死，结算时统一变尸体/变异）
