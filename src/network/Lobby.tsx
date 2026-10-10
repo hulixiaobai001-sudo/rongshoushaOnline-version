@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Users, Copy, Check, Wifi, LogOut, ArrowLeft, RefreshCw, Play, Eye, Bug } from 'lucide-react'
 import { OnlineGame } from './OnlineGame'
 import { useGameStore } from '@/store/gameStore'
+import { HERO_POOL } from '@/data/heroData'
+import { HERO_POOL_V1_1_IDS } from '@/data/gameData'
 import { registerRoom, updateRoomPlayerCount, unregisterRoom, wsRegisterRoom, wsUpdateRoom, wsUnregisterRoom, closeRoomSocket } from './roomServer'
 
 interface LobbyProps {
@@ -14,7 +16,12 @@ interface LobbyProps {
   quickJoinCode?: string
 }
 
-const DEBUG_PHRASE = '柯基不爱喝茶'
+// 调试模式口令。**必须与后台口令无关**。
+// 历史事故：这里曾与 server/index.js 的 ADMIN_PASSWORD 用同一个字符串，
+// 而本常量是模块级字面量、minify 不会内联，导致后台密码可从线上 JS 直接搜到。
+// 限制：这只是一个"防止普通玩家误入调试台"的标记，不是安全边界 ——
+// 真要当边界用，应改为服务端下发的一次性 token。
+const DEBUG_PHRASE = import.meta.env.VITE_DEBUG_PHRASE || 'debug-mode-local-only'
 
 
 // ═══════════════════════════════════════════════════
@@ -137,20 +144,12 @@ function RoleAssignmentPanel({ debugMode, botNames, onBotRemove }: {
                     <select value={curHero} onChange={(e) => setPlayerHero(p.id, e.target.value)}
                       className="flex-1 text-[9px] bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-slate-300 min-w-0">
                       <option value="">随机英雄</option>
-                      <option value="xiling">斯派洛</option>
-                      <option value="niangao">杰克.死眼</option>
-                      <option value="lilongxiang">科利.清道夫</option>
-                      <option value="zhangyang">麦克.锐耳</option>
-                      <option value="yeyu">银行经理</option>
-                      <option value="baiye">玛丽</option>
-                      <option value="tianyi">麟破仑.熔金</option>
-                      <option value="zhuxun">罗宾</option>
-                      <option disabled className="text-slate-600">—— 暂未开放 ——</option>
-                      <option value="kexiong" disabled>科雄（暂未开放）</option>
-                      <option value="fengming" disabled>冯明（暂未开放）</option>
-                      <option value="wangli" disabled>王力（暂未开放）</option>
-                      <option value="yanzhuo" disabled>言浊（暂未开放）</option>
-                      <option value="jiangfeng" disabled>江枫（暂未开放）</option>
+                      {/* 从英雄注册表派生：新增英雄只需改 HERO_POOL_V1_1_IDS，不必再动这里 */}
+                      {HERO_POOL_V1_1_IDS.map((hid) => {
+                        const h = HERO_POOL.find((x) => x.id === hid)
+                        if (!h) return null
+                        return <option key={hid} value={hid}>{h.name}</option>
+                      })}
                     </select>
                     {/* 删除：仅空壳可删（联机玩家由对方退出后自动移除，删了也不生效） */}
                     {isBot ? (

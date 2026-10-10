@@ -3,6 +3,7 @@ import { createGame, serializeGame, nextPhase, movePlayer, useSkill, submitVotes
 import { createServer } from 'http';
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
+import crypto from 'crypto';
 
 // ============================================
 // 配置
@@ -16,9 +17,48 @@ const PUBLIC_DIR = join(import.meta.dirname, '..', 'dist');
 const rooms = new Map(); // roomId -> { hostId, hostName, playerCount, maxPlayers, isPublic, hasPassword, createdAt, updatedAt }
 const roomHistory = [];   // 对局历史（创建/结束记录）
 const adminTokens = new Map(); // token -> expiry
-const ADMIN_PASSWORD = '柯基不爱喝茶';
+
+// 后台口令：只从环境变量读取，禁止硬编码兜底。
+// 历史事故：口令曾硬编码为字面量，且同一字符串被前端 Lobby.tsx 的 DEBUG_PHRASE 引用，
+// 导致压缩后的线上 JS 里可以直接搜到后台密码。
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+if (!ADMIN_PASSWORD) {
+  console.error('❌ 未设置环境变量 ADMIN_PASSWORD，后台接口将被禁用。');
+  console.error('   启动方式：ADMIN_PASSWORD=<强口令> node server/index.js');
+}
+
+// 后台登录失败限流：同一 IP 连续失败 5 次锁定 15 分钟
+const loginFails = new Map(); // ip -> { count, until }
+const LOGIN_MAX_FAILS = 5;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+function loginLocked(ip) {
+  const rec = loginFails.get(ip);
+  if (!rec) return false;
+  if (rec.until && Date.now() < rec.until) return true;
+  if (rec.until && Date.now() >= rec.until) loginFails.delete(ip);
+  return false;
+}
+function noteLoginFail(ip) {
+  const rec = loginFails.get(ip) || { count: 0, until: 0 };
+  rec.count++;
+  if (rec.count >= LOGIN_MAX_FAILS) { rec.until = Date.now() + LOGIN_LOCK_MS; rec.count = 0; }
+  loginFails.set(ip, rec);
+}
+function clearLoginFail(ip) { loginFails.delete(ip); }
+
+// 常量时间比较（避免通过响应耗时逐字符猜测口令）
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
 // 可用英雄池（与 gameEngine.HERO_POOL 一致）
-const HERO_SET = new Set(['xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun']);
+const HERO_SET = new Set([
+  'xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun',
+  'kexiong', 'fengming', 'wangli', 'yanzhuo', 'jiangfeng',
+]);
 // 技能名映射（玛丽追踪记录用）
 const SKILL_NAMES = {
   basic_kill: '攻击',
@@ -114,19 +154,28 @@ const httpServer = createServer((req, res) => {
     // ===== 管理后台 API =====
     // 后台登录
     if (url.pathname === '/api/admin/login' && req.method === 'POST') {
+      const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+      if (!ADMIN_PASSWORD) { sendJson(res, 503, { ok: false, error: '后台未配置口令' }); return; }
+      if (loginLocked(ip)) { sendJson(res, 429, { ok: false, error: '失败次数过多，请稍后再试' }); return; }
       let body = '';
-      req.on('data', chunk => { body += chunk; });
+      req.on('data', chunk => {
+        body += chunk;
+        if (body.length > 4096) { req.destroy(); }
+      });
       req.on('end', () => {
         try {
           const data = JSON.parse(body);
-          if (data.password === ADMIN_PASSWORD) {
-            const token = generateId(24);
+          if (safeEqual(data.password, ADMIN_PASSWORD)) {
+            clearLoginFail(ip);
+            const token = crypto.randomBytes(24).toString('hex');
             adminTokens.set(token, Date.now() + 1000 * 60 * 60 * 8); // 8小时
             sendJson(res, 200, { ok: true, token });
           } else {
+            noteLoginFail(ip);
             sendJson(res, 401, { ok: false, error: '密码错误' });
           }
         } catch (e) {
+          noteLoginFail(ip);
           sendJson(res, 400, { ok: false, error: '格式错误' });
         }
       });

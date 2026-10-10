@@ -117,6 +117,11 @@ export const HERO_POOL_V1_1_IDS = [
   'baiye',         // 玛丽（追踪香囊）
   'tianyi',        // 麟破仑.熔金（识破）
   'zhuxun',        // 罗宾（疾行）
+  'kexiong',       // 科雄（洞察）
+  'fengming',      // 冯明（传送）
+  'wangli',        // 王力（大力射门）
+  'yanzhuo',       // 言浊（过肩摔）
+  'jiangfeng',     // 江枫（侦察无人机）
 ];
 
 // ============================================

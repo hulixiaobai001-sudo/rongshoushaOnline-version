@@ -4,7 +4,10 @@
 // ============================================
 
 // ---------- 英雄池（8个可用） ----------
-const HERO_POOL = ['xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun'];
+const HERO_POOL = [
+  'xiling', 'niangao', 'lilongxiang', 'zhangyang', 'yeyu', 'baiye', 'tianyi', 'zhuxun',
+  'kexiong', 'fengming', 'wangli', 'yanzhuo', 'jiangfeng',
+];
 
 // ---------- 地图（10地点） ----------
 const DEFAULT_MAP = [
@@ -138,7 +141,10 @@ function serializeGame(game, viewerId) {
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed, votedFor: p.votedFor,
       isBot: !!p.isBot, // 空壳标记：前端据此区分真假玩家
-      normalAttackRemaining: p.normalAttackRemaining, asylumAttackRemaining: p.asylumAttackRemaining,
+      // 攻击次数只发给本人：这两个计数器只有杀手会变化（grantAsylumIfInMarsh / attackPlayer 都按 identity==='killer' 处理），
+      // 全量下发等于把"谁是杀手"直接广播出去。
+      normalAttackRemaining: p.id === viewerId ? p.normalAttackRemaining : undefined,
+      asylumAttackRemaining: p.id === viewerId ? p.asylumAttackRemaining : undefined,
       // 身份：只给本人或已暴露（死亡/枪毙）；对局结束后（end/winner）全体公开用于结算展示
       identity: (p.id === viewerId || p.isRevealed || game.phase === 'end' || game.winner) ? p.identity : undefined,
     })),
@@ -387,6 +393,11 @@ const SKILL_PHASES = {
   baiye_track: 'action',
   tianyi_investigate_same_room: 'action',
   zhuxun_double_move: 'move',
+  kexiong_investigate: 'action',
+  fengming_teleport: 'move',
+  wangli_big_shot: 'action',
+  yanzhuo_suplex: 'action',
+  jiangfeng_drone: 'action',
 };
 
 // 技能使用限制（once_per_game 进 usedSkills；once_per_round 进 roundSkillUsage，每轮重置）
@@ -399,12 +410,44 @@ const SKILL_LIMITS = {
   baiye_track: 'once_per_game',
   tianyi_investigate_same_room: 'once_per_game',
   zhuxun_double_move: 'once_per_round',
+  kexiong_investigate: 'once_per_game',
+  fengming_teleport: 'once_per_game',
+  wangli_big_shot: 'once_per_game',
+  yanzhuo_suplex: 'once_per_game',
+  jiangfeng_drone: 'once_per_game',
+};
+
+// 技能 → 所属英雄（服务器权威：防止任何玩家使用他人的技能）
+const SKILL_OWNERS = {
+  xiling_kill_same_room: 'xiling',
+  niangao_kungfu: 'niangao',
+  lilongxiang_gunshot: 'lilongxiang',
+  zhangyang_cut_connection: 'zhangyang',
+  yeyu_stealth: 'yeyu',
+  baiye_track: 'baiye',
+  tianyi_investigate_same_room: 'tianyi',
+  zhuxun_double_move: 'zhuxun',
+  kexiong_investigate: 'kexiong',
+  fengming_teleport: 'fengming',
+  wangli_big_shot: 'wangli',
+  yanzhuo_suplex: 'yanzhuo',
+  jiangfeng_drone: 'jiangfeng',
 };
 
 // ---------- 技能 ----------
 function useSkill(game, playerId, skillId, targetId, targetLocationId) {
   const p = game.players.find(x => x.id === playerId);
   if (!p || p.status !== 'alive') return { ok: false, msg: '无效玩家' };
+
+  // 白名单反转：未登记在 SKILL_OWNERS / basic_kill 的 skillId 一律拒绝。
+  // （原先 SKILL_PHASES[未知技能] === undefined 会让阶段与次数校验静默跳过）
+  if (skillId !== 'basic_kill' && !SKILL_OWNERS[skillId]) {
+    return { ok: false, msg: '未知技能' };
+  }
+  // 英雄归属校验：只允许使用自己英雄的技能
+  if (skillId !== 'basic_kill' && SKILL_OWNERS[skillId] !== p.heroId) {
+    return { ok: false, msg: '这不是你的技能' };
+  }
 
   // 阶段校验（basic_kill 走 attackPlayer 自己的检查）
   if (skillId !== 'basic_kill') {
@@ -500,6 +543,43 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       markUsed(game, playerId, skillId);
       return { ok: true };
     }
+    case 'kexiong_investigate': {
+      // 洞察：查验任意一名存活玩家的真实身份
+      const t = game.players.find(x => x.id === targetId);
+      if (!t || t.status !== 'alive') return { ok: false, msg: '无效目标' };
+      markUsed(game, playerId, skillId);
+      return { ok: true, reveal: { targetId: t.id, identity: t.identity } };
+    }
+    case 'fengming_teleport':
+      // 传送：下次移动可到达任意地点
+      p.teleportReady = true;
+      markUsed(game, playerId, skillId);
+      return { ok: true };
+    case 'wangli_big_shot': {
+      // 大力射门：令相邻地点的玩家下个移动阶段无法行动
+      const cur = game.locations.find(l => l.id === p.locationId);
+      const tgtLoc = game.locations.find(l => l.id === targetLocationId);
+      if (!cur || !tgtLoc || !cur.connectedTo.includes(tgtLoc.id)) return { ok: false, msg: '只能选择相邻地点' };
+      game.players.filter(x => x.locationId === tgtLoc.id && x.status === 'alive').forEach(x => { x.halted = true; });
+      markUsed(game, playerId, skillId);
+      return { ok: true };
+    }
+    case 'yanzhuo_suplex': {
+      // 过肩摔：令同地点一名玩家下个移动阶段无法行动
+      const t = game.players.find(x => x.id === targetId);
+      if (!t || t.locationId !== p.locationId || t.status !== 'alive') return { ok: false, msg: '目标不在同一地点' };
+      if (t.id === p.id) return { ok: false, msg: '不能对自己使用' };
+      t.halted = true;
+      markUsed(game, playerId, skillId);
+      return { ok: true };
+    }
+    case 'jiangfeng_drone':
+      // 侦察无人机：记录本地点经过人员（由 locationVisits 提供数据）
+      game.droneLocationId = p.locationId;
+      game.dronePlayerId = p.id;
+      game.droneRound = game.round;
+      markUsed(game, playerId, skillId);
+      return { ok: true };
     default:
       return { ok: false, msg: '未知技能' };
   }
