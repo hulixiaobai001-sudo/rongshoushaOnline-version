@@ -4,6 +4,7 @@ import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations, HERO_POOL_V1_1_IDS } from '@/data/gameData'
 import { unregisterRoom, wsUnregisterRoom } from './roomServer'
 import { netToHost, netOn, netSendGameAction } from './netClient'
+import { storageGet, storageSet } from '@/lib/safeStorage'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -222,11 +223,11 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
           const myId = store.myPlayerId
           if (myId) {
             const myAlive = (msg.state.players || []).find((p: any) => p.id === myId)?.status
-            if (myAlive === 'dead' && !localStorage.getItem('rs_dead_notified_' + myId)) {
+            if (myAlive === 'dead' && !storageGet('rs_dead_notified_' + myId)) {
               // 找自己死亡的事件
               const deathEvt = (msg.state.events || []).slice().reverse().find((e: any) => e.text && e.text.includes(store.players.find((x: any) => x.id === myId)?.name || '你') && (e.text.includes('被') || e.text.includes('出局')))
               setPopup({ type: 'info', title: '💀 你已死亡', desc: deathEvt ? deathEvt.text : '你已死亡，进入观战视角' })
-              try { localStorage.setItem('rs_dead_notified_' + myId, '1') } catch {}
+              storageSet('rs_dead_notified_' + myId, '1')
             }
           }
           // 身份兜底：没收到your_role时，从状态里认自己（serialize给本人真实身份）
@@ -1367,14 +1368,16 @@ function InfoPanel({ store, players }: { store: any; players: any[] }) {
         <div>
           <p className="text-[9px] text-slate-500 font-medium mb-0.5">📋 记录</p>
           <button onClick={() => {
-            const saved = localStorage.getItem('rongshousha_notes') || ''
+            const saved = storageGet('rongshousha_notes') || ''
             const note = prompt('记录你的推理：', saved)
-            if (note !== null) localStorage.setItem('rongshousha_notes', note)
+            if (note !== null) storageSet('rongshousha_notes', note)
           }}
             className="w-full text-left text-[9px] text-slate-400 bg-slate-900/50 border border-slate-700 rounded p-2 hover:bg-slate-800 transition-colors">
-            {localStorage.getItem('rongshousha_notes') 
-              ? localStorage.getItem('rongshousha_notes')?.substring(0, 50) + (localStorage.getItem('rongshousha_notes')!.length > 50 ? '...' : '')
-              : '点击记录推理...'}
+            {(() => {
+              const notes = storageGet('rongshousha_notes') || ''
+              if (!notes) return '点击记录推理...'
+              return notes.substring(0, 50) + (notes.length > 50 ? '...' : '')
+            })()}
           </button>
         </div>
       )}

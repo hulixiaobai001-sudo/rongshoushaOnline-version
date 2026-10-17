@@ -1,8 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 禁止浏览器自动翻译：翻译会重排文本节点，破坏 React 管理的 DOM，
+         典型症状就是 removeChild NotFoundError 整页崩溃。
+         游戏界面本来就是中文，不需要翻译。 -->
+    <meta name="google" content="notranslate" />
     <title>绒兽杀</title>
   </head>
   <body>

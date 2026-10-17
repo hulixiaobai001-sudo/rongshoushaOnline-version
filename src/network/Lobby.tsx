@@ -10,6 +10,7 @@ import { useGameStore } from '@/store/gameStore'
 import { HERO_POOL } from '@/data/heroData'
 import { HERO_POOL_V1_1_IDS } from '@/data/gameData'
 import { registerRoom, updateRoomPlayerCount, unregisterRoom, wsRegisterRoom, wsUpdateRoom, wsUnregisterRoom, closeRoomSocket } from './roomServer'
+import { storageGet, storageSet, storageRemove } from '@/lib/safeStorage'
 
 interface LobbyProps {
   onBack: () => void
@@ -200,9 +201,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   const [status, setStatus] = useState('')
   const [players, setPlayers] = useState<string[]>([])
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
-  const [myName, setMyName] = useState(() => {
-    try { return localStorage.getItem('rs_player_name') || '' } catch { return '' }
-  })
+  const [myName, setMyName] = useState(() => storageGet('rs_player_name') || '')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showWarning, setShowWarning] = useState(true)
@@ -216,7 +215,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
 
   // 防刷新：自动重连 + 支持从大厅快速加入
   useEffect(() => {
-    const savedName = (() => { try { return localStorage.getItem('rs_player_name') || '' } catch { return '' } })()
+    const savedName = storageGet('rs_player_name') || ''
     if (savedName) setMyName(savedName)
     // 从大厅快速加入
     if (quickJoinCode) {
@@ -226,8 +225,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       return () => clearTimeout(t)
     }
     // 刷新后自动重连（玩家角色）
-    const savedRoom = (() => { try { return localStorage.getItem('rs_room_code') || '' } catch { return '' } })()
-    const savedRole = (() => { try { return localStorage.getItem('rs_room_role') || '' } catch { return '' } })()
+    const savedRoom = storageGet('rs_room_code') || ''
+    const savedRole = storageGet('rs_room_role') || ''
     if (savedRoom && savedRole === 'player' && savedName) {
       setInputCode(savedRoom)
       setStatus('正在自动重连房间 ' + savedRoom + ' ...')
@@ -256,11 +255,11 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       }
       // 记录加入顺序（供游戏私发身份）
       try {
-        const order = localStorage.getItem('rs_join_order')
+        const order = storageGet('rs_join_order')
         const list = order ? JSON.parse(order) : []
         if (!list.includes(msg.playerId)) {
           list.push(msg.playerId)
-          localStorage.setItem('rs_join_order', JSON.stringify(list))
+          storageSet('rs_join_order', JSON.stringify(list))
         }
       } catch { /* ignore */ }
       if (msg.name) setPlayerNames(prev => ({ ...prev, [msg.playerId]: msg.name }))
@@ -364,7 +363,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       name = prompt('请输入你的玩家名称（房主）：') || ''
       if (!name.trim()) { setStatus('请输入玩家名称'); return }
       setMyName(name)
-      localStorage.setItem('rs_player_name', name)
+      storageSet('rs_player_name', name)
     }
     connectingRef.current = true
     setLoading(true)
@@ -379,8 +378,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       store.resetGame()
       store.addPlayer(name)
       // 保存房间信息到localStorage（防刷新）
-      localStorage.setItem('rs_room_code', room.roomId)
-      localStorage.setItem('rs_room_role', 'host')
+      storageSet('rs_room_code', room.roomId)
+      storageSet('rs_room_role', 'host')
       // 注册到房间服务器（公开房间显示在大厅）
       const regData = {
         roomId: room.roomId,
@@ -418,7 +417,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
       name = prompt('请输入你的玩家名称：') || ''
       if (!name.trim()) { setStatus('请输入玩家名称'); return }
       setMyName(name)
-      localStorage.setItem('rs_player_name', name)
+      storageSet('rs_player_name', name)
     }
     connectingRef.current = true
     setLoading(true)
@@ -426,8 +425,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     try {
       const room = await netJoinRoom(code, name, isSpectator)
       // 保存房间信息到localStorage（防刷新）
-      localStorage.setItem('rs_room_code', code)
-      localStorage.setItem('rs_room_role', 'player')
+      storageSet('rs_room_code', code)
+      storageSet('rs_room_role', 'player')
       // 清空本地玩家数据（防止多次进出房间后 store.players 累积成 20+ 人）
       store.resetGame()
       setMode('join')
@@ -467,16 +466,40 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     // 清空本地玩家数据（防止累积）
     store.resetGame()
     // 清除防刷新数据
-    localStorage.removeItem('rs_room_code')
-    localStorage.removeItem('rs_room_role')
+    storageRemove('rs_room_code')
+    storageRemove('rs_room_role')
     connectingRef.current = false
     setLoading(false)
   }
 
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  // 复制房间码：局域网 http / 安卓 WebView 里 navigator.clipboard 可能不存在或拒绝，
+  // 必须兜底，不能让它抛异常（会触发全局错误提示，旧版甚至会因此崩掉整个页面）。
+  const copyRoomCode = async () => {
+    const text = roomCode
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // 降级：临时 textarea + execCommand
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.top = '0'
+        ta.style.left = '0'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        const ok = document.execCommand('copy')
+        ta.remove()
+        if (!ok) throw new Error('execCommand copy 失败')
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // 复制失败不算错误：把房间码显示出来让玩家手动抄
+      setStatus(`复制失败，请手动记下房间码：${text}`)
+    }
   }
 
   // 调试模式：用空壳玩家填充（不挤占已有联机玩家）
