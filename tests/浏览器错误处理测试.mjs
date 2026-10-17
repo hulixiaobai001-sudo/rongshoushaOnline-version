@@ -19,9 +19,11 @@ import { fileURLToPath } from 'node:url'
 import WebSocket from 'ws'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// 设 TARGET_URL 时直接测线上站点（不启动本地 server），用于部署后验收
+const EXTERNAL_URL = process.env.TARGET_URL || ''
 const APP_PORT = 32000 + Math.floor(Math.random() * 500)
 const DEBUG_PORT = 9300 + Math.floor(Math.random() * 500)
-const BASE = `http://127.0.0.1:${APP_PORT}/`
+const BASE = EXTERNAL_URL || `http://127.0.0.1:${APP_PORT}/`
 
 const EDGE_CANDIDATES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -82,12 +84,16 @@ try {
     pass++
     exitCode = 0
   } else {
-    const server = spawn(process.execPath, ['server/index.js'], {
-      cwd: ROOT,
-      env: { ...process.env, PORT: String(APP_PORT), ADMIN_PASSWORD: 'browser-test-only' },
-      stdio: 'ignore',
-    })
-    children.push(server)
+    if (!EXTERNAL_URL) {
+      const server = spawn(process.execPath, ['server/index.js'], {
+        cwd: ROOT,
+        env: { ...process.env, PORT: String(APP_PORT), ADMIN_PASSWORD: 'browser-test-only' },
+        stdio: 'ignore',
+      })
+      children.push(server)
+    } else {
+      console.log(`\n🎯 目标站点：${BASE}`)
+    }
 
     const userDataDir = path.join(os.tmpdir(), `rsx-edge-${Date.now()}`)
     const edge = spawn(EDGE, [
