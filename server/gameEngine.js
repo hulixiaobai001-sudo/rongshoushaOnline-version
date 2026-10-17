@@ -86,6 +86,7 @@ function createGame({ hostName, players: names, killerCount, botNames = [] }) {
     id: genId('p'), name: n, identity: '', status: 'alive',
     locationId: '', isRevealed: false, heroId: '',
     halted: false, teleportReady: false, doubleMoveActive: false, doubleMoveFirstDone: false,
+    movedThisPhase: false, // 本移动阶段是否已移动（疾行可额外一次）
     normalAttackRemaining: 1, asylumAttackRemaining: 0,
     votedFor: null, voteCount: 0,
     isBot: botNames.includes(n),
@@ -141,6 +142,8 @@ function serializeGame(game, viewerId) {
       doubleMoveActive: p.doubleMoveActive, doubleMoveFirstDone: p.doubleMoveFirstDone,
       isRevealed: p.isRevealed, votedFor: p.votedFor,
       isBot: !!p.isBot, // 空壳标记：前端据此区分真假玩家
+      // 本阶段是否已移动：只发本人（用于重连/刷新后按钮状态正确）
+      movedThisPhase: p.id === viewerId ? !!p.movedThisPhase : undefined,
       // 攻击次数只发给本人：这两个计数器只有杀手会变化（grantAsylumIfInMarsh / attackPlayer 都按 identity==='killer' 处理），
       // 全量下发等于把"谁是杀手"直接广播出去。
       normalAttackRemaining: p.id === viewerId ? p.normalAttackRemaining : undefined,
@@ -186,6 +189,7 @@ function nextPhase(game) {
     game.players.forEach(p => {
       if (p.halted) p.halted = false;
       if (p.doubleMoveActive) { p.doubleMoveActive = false; p.doubleMoveFirstDone = false; }
+      p.movedThisPhase = false; // 新轮次移动标记清零
       if (!p.locationId) {
         const av = game.locations.filter(l => !l.isBlocked);
         if (av.length) p.locationId = av[Math.floor(Math.random() * av.length)].id;
@@ -208,6 +212,7 @@ function nextPhase(game) {
       game.players.forEach(p => {
         if (p.halted) p.halted = false;
         if (p.doubleMoveActive) { p.doubleMoveActive = false; p.doubleMoveFirstDone = false; }
+        p.movedThisPhase = false; // 离开移动阶段：下一轮移动重新计数
       });
     }
     // 进入行动清功夫
@@ -223,23 +228,37 @@ function movePlayer(game, playerId, locationId) {
   if (!p || p.status !== 'alive') return { ok: false, msg: '无效玩家' };
   // 服务器权威：只有移动阶段可以移动（前端按钮已限制，这里防越权/误发）
   if (!game.phase.startsWith('move')) return { ok: false, msg: '当前阶段无法移动' };
-  if (p.halted && game.phase.startsWith('move')) return { ok: false, msg: '你处于停步状态' };
+  if (p.halted) return { ok: false, msg: '你处于停步状态' };
   const to = game.locations.find(l => l.id === locationId);
   const from = game.locations.find(l => l.id === p.locationId);
   if (!to) return { ok: false, msg: '目标不存在' };
   if (to.isBlocked) return { ok: false, msg: `${to.name} 已封锁` };
+  if (p.locationId === locationId) return { ok: false, msg: `你已经在${to.name}` };
 
-  // 死人湾单向
-  if (from?.effect?.type === 'bridge_jump') {
-    const canGo = from.name === '死人湾' ? BRIDGE_DESTS : [];
-    if (!canGo.includes(to.name) && !from.connectedTo.includes(locationId)) {
-      return { ok: false, msg: '【死人湾·单向】此路不通' };
+  // 本阶段移动次数：正常 1 次；疾行（doubleMoveActive）允许 2 次
+  if (p.movedThisPhase) {
+    const canSecondMove = p.doubleMoveActive && p.doubleMoveFirstDone;
+    if (!canSecondMove) {
+      return { ok: false, msg: p.doubleMoveActive ? '本阶段疾行次数已用完' : '本阶段已移动' };
     }
-  } else if (!from?.connectedTo.includes(locationId)) {
-    return { ok: false, msg: `无法到达 ${to.name}` };
+  }
+
+  // 传送（冯明·传送就绪）：无视相邻关系，可直达任意未封锁地点
+  const canTeleport = !!p.teleportReady;
+  if (!canTeleport) {
+    // 死人湾单向
+    if (from?.effect?.type === 'bridge_jump') {
+      const canGo = from.name === '死人湾' ? BRIDGE_DESTS : [];
+      if (!canGo.includes(to.name) && !from.connectedTo.includes(locationId)) {
+        return { ok: false, msg: '【死人湾·单向】此路不通' };
+      }
+    } else if (!from?.connectedTo.includes(locationId)) {
+      return { ok: false, msg: `无法到达 ${to.name}` };
+    }
   }
 
   p.locationId = locationId;
+  p.movedThisPhase = true;
   // 经过记录
   if (!game.locationVisits[locationId]) game.locationVisits[locationId] = [];
   if (!game.locationVisits[locationId].includes(playerId)) game.locationVisits[locationId].push(playerId);
@@ -253,12 +272,12 @@ function movePlayer(game, playerId, locationId) {
   }
   // 传送一次性
   if (p.teleportReady) p.teleportReady = false;
-  // 疾行
+  // 疾行：第一次移动已用，第二次移动完成后消耗疾行状态
   if (p.doubleMoveActive) {
     if (!p.doubleMoveFirstDone) p.doubleMoveFirstDone = true;
     else { p.doubleMoveActive = false; p.doubleMoveFirstDone = false; }
   }
-  return { ok: true };
+  return { ok: true, locationName: to.name, teleport: canTeleport, doubleMoveActive: p.doubleMoveActive };
 }
 
 // ---------- 攻击（刀人） ----------
@@ -528,7 +547,9 @@ function useSkill(game, playerId, skillId, targetId, targetLocationId) {
       return { ok: true, reveal: { targetId: t.id, identity: t.identity } };
     }
     case 'zhuxun_double_move':
-      p.doubleMoveActive = true; p.doubleMoveFirstDone = false;
+      // 疾行：本移动阶段可移动两次；若已经移动过一次，则还剩一次
+      p.doubleMoveActive = true;
+      p.doubleMoveFirstDone = !!p.movedThisPhase;
       markUsed(game, playerId, skillId);
       return { ok: true };
     case 'zhangyang_cut_connection': {

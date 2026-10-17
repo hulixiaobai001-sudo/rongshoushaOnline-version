@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import { getHeroById, HERO_POOL } from '@/data/heroData'
 import { getReachableLocations, HERO_POOL_V1_1_IDS } from '@/data/gameData'
@@ -123,11 +123,20 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
   const [hasMoved, setHasMoved] = useState(false)
   const [myReady, setMyReady] = useState(false)
   const [readyCount, setReadyCount] = useState(0)
-  const [toast, setToast] = useState<string | null>(null)
+  // 服务端 toast：统一的操作反馈（移动/技能成功失败、掉线重连提示）
+  const [toast, setToast] = useState<{ text: string; level: string; id: number } | null>(null)
+  const toastSeq = useRef(0)
   const [cutPair, setCutPair] = useState<string[]>([])
 
   // 阶段变更时重置移动状态
   useEffect(() => { setHasMoved(false); setMyReady(false) }, [phase])
+
+  // toast 4 秒后自动消失
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // 当前玩家：房主=players[0]，玩家=myPlayerId对应slot
   const myPlayer = isSpectator
@@ -202,6 +211,11 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
         if (Array.isArray(msg.state.players) && msg.state.players.length > 0) {
           store.applyRemoteState(msg.state)
           setLoading(false)
+          // 移动状态以服务端为准（重连/刷新后"已移动"按钮状态正确）
+          const meState = isHost
+            ? msg.state.players[0]
+            : (store.myPlayerId ? msg.state.players.find((p: any) => p.id === store.myPlayerId) : null)
+          if (meState && typeof meState.movedThisPhase === 'boolean') setHasMoved(meState.movedThisPhase)
           // 就绪数同步
           if (typeof msg.state.readyCount === 'number') setReadyCount(msg.state.readyCount)
           // 死亡检测：弹窗提示
@@ -244,6 +258,10 @@ export function OnlineGame({ isHost, isSpectator, debugMode, botNames: _botNames
           store.setPlayerHero(msg.playerId, msg.heroId)
         }
         try { localStorage.setItem('rs_my_player_id', msg.playerId) } catch {}
+      } else if (msg.type === 'toast') {
+        // 服务端统一反馈（移动/技能成功失败、掉线/重连）
+        toastSeq.current += 1
+        setToast({ text: msg.text || '', level: msg.level || 'info', id: toastSeq.current })
       } else if (msg.type === 'private_info') {
         setPopup({ type: 'info', title: '🔍 探查结果', desc: msg.text })
       }
@@ -788,11 +806,17 @@ ${skill.description}`)
           <p className="text-xs font-bold text-red-200">💔 你已濒死！等待所有人准备后结算...</p>
         </div>
       )}
-      {/* 通知条 */}
+      {/* 通知条（服务端 toast 反馈） */}
       {toast && (
-        <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200 flex items-center justify-between">
-          <span>{toast}</span>
-          <button onClick={() => setToast(null)} className="text-amber-400 hover:text-amber-200 ml-2">✕</button>
+        <div className={`shrink-0 px-3 py-1.5 text-[11px] flex items-center justify-between border-b ${
+          toast.level === 'error'
+            ? 'bg-red-900/80 border-red-700 text-red-200'
+            : toast.level === 'success'
+              ? 'bg-emerald-900/80 border-emerald-700 text-emerald-200'
+              : 'bg-amber-900/80 border-amber-700 text-amber-200'
+        }`}>
+          <span>{toast.text}</span>
+          <button onClick={() => setToast(null)} className="opacity-70 hover:opacity-100 ml-2">✕</button>
         </div>
       )}
       <div className="shrink-0 bg-amber-900/80 border-b border-amber-700 px-3 py-1.5 text-[11px] text-amber-200">

@@ -356,6 +356,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
 
   const handleCreateRoom = async (customCode?: string) => {
     if (connectingRef.current) return
+    // 房间码规范化：大写、去掉空格/连字符（留空则由服务器生成 6 位易读码）
+    const code = String(customCode || '').toUpperCase().replace(/[\s\-_]/g, '')
     // 检查房主名
     let name = myName
     if (!name) {
@@ -368,7 +370,7 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setLoading(true)
     setStatus('正在创建房间...')
     try {
-      const room = await netCreateRoom(customCode || '', name, { isPublic: roomPublic })
+      const room = await netCreateRoom(code, name, { isPublic: roomPublic })
       setMode('host')
       setRoomCode(room.roomId)
       setPlayers([])
@@ -408,7 +410,8 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
   }
 
   const handleJoinRoom = async () => {
-    if (!inputCode.trim() || connectingRef.current) return
+    const code = String(inputCode || '').toUpperCase().replace(/[\s\-_]/g, '')
+    if (!code || connectingRef.current) return
     // 检查玩家名
     let name = myName
     if (!name) {
@@ -421,9 +424,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
     setLoading(true)
     setStatus('正在加入房间...')
     try {
-      const room = await netJoinRoom(inputCode.trim(), name, isSpectator)
+      const room = await netJoinRoom(code, name, isSpectator)
       // 保存房间信息到localStorage（防刷新）
-      localStorage.setItem('rs_room_code', inputCode.trim())
+      localStorage.setItem('rs_room_code', code)
       localStorage.setItem('rs_room_role', 'player')
       // 清空本地玩家数据（防止多次进出房间后 store.players 累积成 20+ 人）
       store.resetGame()
@@ -635,8 +638,9 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
 
               {/* 自定义房间码 */}
               <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-2 border border-slate-700">
-                <input id="roomCodeInput" placeholder="输入房间码（可选，留空自动生成）" maxLength={12}
-                  className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none"
+                <input id="roomCodeInput" placeholder="自定义房间码（可选，4-8 位；留空自动生成 6 位码）" maxLength={8}
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none uppercase tracking-widest"
+                  onInput={(e) => { const el = e.currentTarget; el.value = el.value.toUpperCase().replace(/[\s\-_]/g, '').slice(0, 8) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreateRoom() }} />
               </div>
               <Button onClick={() => {
@@ -670,10 +674,11 @@ export function Lobby({ onBack, quickJoinCode }: LobbyProps) {
               </div>
 
               <div className="flex gap-2">
-                <Input placeholder="输入房间码" value={inputCode}
-                  onChange={(e) => setInputCode(e.target.value)}
+                <Input placeholder="输入 6 位房间码" value={inputCode}
+                  onChange={(e) => setInputCode(e.target.value.toUpperCase().replace(/[\s\-_]/g, '').slice(0, 8))}
                   onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
-                  className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 h-10" />
+                  maxLength={8}
+                  className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 h-10 uppercase tracking-widest font-mono" />
                 <Button onClick={handleJoinRoom} disabled={loading} variant="secondary" className="h-10 shrink-0">
                   {loading ? '加入中...' : isSpectator ? '观战' : '加入'}
                 </Button>

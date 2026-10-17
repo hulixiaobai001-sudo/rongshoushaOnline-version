@@ -119,6 +119,11 @@ function send(obj: any) {
 // API
 // ============================================
 
+// 房间码规范化：大写、去掉空格/连字符（与服务端 normalizeRoomCode 一致）
+function normalizeRoomCode(v: string): string {
+  return String(v || '').trim().toUpperCase().replace(/[\s\-_]/g, '')
+}
+
 /** 创建房间（房主） */
 export async function netCreateRoom(roomId: string, hostName: string, opts: { isPublic?: boolean; maxPlayers?: number } = {}): Promise<any> {
   await openSocket()
@@ -144,7 +149,7 @@ export async function netCreateRoom(roomId: string, hostName: string, opts: { is
     }, 15000)
     send({
       type: 'room_create',
-      roomId,
+      roomId: normalizeRoomCode(roomId),
       hostName,
       isPublic: !!opts.isPublic,
       maxPlayers: opts.maxPlayers || 8,
@@ -174,7 +179,7 @@ export async function netJoinRoom(roomId: string, playerName: string, isSpectato
       handlers['onJoined'] = (handlers['onJoined'] || []).filter(f => f !== joinedFn)
       handlers['onError'] = (handlers['onError'] || []).filter(f => f !== errFn2)
     }, 15000)
-    send({ type: 'room_join', roomId, playerName, isSpectator })
+    send({ type: 'room_join', roomId: normalizeRoomCode(roomId), playerName, isSpectator })
   })
 }
 

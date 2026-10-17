@@ -12,6 +12,9 @@ interface LobbyHallProps {
   onJoinByCode: (roomId: string) => void
 }
 
+// 房间码规范化：大写、去掉空格/连字符、最多 8 位
+const normalizeRoomCode = (v: string) => String(v || '').toUpperCase().replace(/[\s\-_]/g, '').slice(0, 8)
+
 export function LobbyHall({ onCreateRoom, onBack, onJoinRoom, onJoinByCode }: LobbyHallProps) {
   const [rooms, setRooms] = useState<PublicRoom[]>([])
   const [loading, setLoading] = useState(false)
@@ -77,10 +80,11 @@ export function LobbyHall({ onCreateRoom, onBack, onJoinRoom, onJoinByCode }: Lo
 
         {/* 输入房间码加入 */}
         <div className="flex gap-2 mt-2 max-w-md">
-          <Input placeholder="输入房间码加入" value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && roomCodeInput.trim()) onJoinByCode(roomCodeInput.trim()) }}
-            className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500" />
-          <Button onClick={() => roomCodeInput.trim() && onJoinByCode(roomCodeInput.trim())}
+          <Input placeholder="输入 6 位房间码加入" value={roomCodeInput} onChange={(e) => setRoomCodeInput(normalizeRoomCode(e.target.value))}
+            maxLength={8}
+            onKeyDown={(e) => { if (e.key === 'Enter' && roomCodeInput.trim()) onJoinByCode(normalizeRoomCode(roomCodeInput)) }}
+            className="flex-1 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 uppercase tracking-widest font-mono" />
+          <Button onClick={() => roomCodeInput.trim() && onJoinByCode(normalizeRoomCode(roomCodeInput))}
             className="bg-emerald-600 hover:bg-emerald-700 h-10 shrink-0">加入</Button>
         </div>
       </div>

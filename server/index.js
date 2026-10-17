@@ -103,11 +103,43 @@ function generateId(len = 8) {
   return id;
 }
 
+// ============================================
+// 房间码：6 位易读（去掉 0/O/1/I/L 等易混淆字符）
+// ============================================
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_LEN = 6;
+
+function normalizeRoomCode(raw) {
+  return String(raw || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
+}
+
+function generateRoomCode() {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = '';
+    for (let i = 0; i < ROOM_CODE_LEN; i++) {
+      code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+    }
+    if (!gameRooms.has(code) && !rooms.has(code)) return code;
+  }
+  return generateId(ROOM_CODE_LEN).toUpperCase();
+}
+
 function cleanupExpiredRooms() {
   const now = Date.now();
   const EXPIRY = 1000 * 45; // 45秒无心跳自动清除（3次心跳间隔）
   rooms.forEach((room, roomId) => {
     if (now - room.updatedAt > EXPIRY) {
+      rooms.delete(roomId);
+    }
+  });
+  // 兜底回收 gameRooms：房主连接已断、或房间长时间无任何活动 → 关闭房间
+  // （此前 gameRooms 只在房主断线时删除，其余情况永不回收）
+  gameRooms.forEach((room, roomId) => {
+    const hostAlive = room.hostWs && room.hostWs.readyState === 1;
+    const idleTooLong = now - (room.lastActivity || now) > 1000 * 60 * 120;
+    if (!hostAlive || idleTooLong) {
+      room.players.forEach((p) => wsSend(p.ws, { type: 'room_closed', message: '房间已超时关闭' }));
+      gameRooms.delete(roomId);
       rooms.delete(roomId);
     }
   });
@@ -382,6 +414,33 @@ function wsSend(ws, obj) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
 }
 
+// 私发一条 toast（前端顶部通知条）：操作成功/失败/掉线提示的统一反馈链路
+function sendToast(ws, text, level = 'info') {
+  wsSend(ws, { type: 'from_host', data: { type: 'toast', text, level } });
+}
+
+// 广播 toast 给房间内所有在线的人
+function broadcastToast(room, text, level = 'info') {
+  if (!room) return;
+  const data = { type: 'from_host', data: { type: 'toast', text, level } };
+  wsSend(room.hostWs, data);
+  room.players.forEach((p) => wsSend(p.ws, data));
+}
+
+// 当前真正在线的游戏角色（用于就绪判定：断线玩家不能卡住整局）
+function onlineGamePlayerIds(room) {
+  const ids = new Set();
+  if (!room || !room.game) return ids;
+  if (room.hostWs && room.hostWs.readyState === 1) ids.add(room.game.players[0].id);
+  room.players.forEach((p, serverId) => {
+    if (p.isSpectator) return;
+    if (!p.ws || p.ws.readyState !== 1) return;
+    const gpId = room.gamePlayerMap ? room.gamePlayerMap.get(serverId) : null;
+    if (gpId) ids.add(gpId);
+  });
+  return ids;
+}
+
 function syncRoomListToRoom(room) {
   // 更新房间列表人数（gameRooms → rooms 注册表）
   if (rooms.has(room.roomId)) {
@@ -400,10 +459,11 @@ function memberList(room) {
   return list;
 }
 
-// 就绪数：只算「存活的真玩家」（空壳自动就绪/不阻塞，不能当真人算）
+// 就绪数：只算「在线且存活的真玩家」（空壳自动就绪/不阻塞；掉线玩家不算，否则永远集不齐）
 function getReadyCount(room) {
   if (!room || !room.game) return 0;
-  return room.game.players.filter(p => p.status === 'alive' && !p.isBot && room.readySet.has(p.id)).length;
+  const online = onlineGamePlayerIds(room);
+  return room.game.players.filter(p => p.status === 'alive' && !p.isBot && online.has(p.id) && room.readySet.has(p.id)).length;
 }
 
 // 玛丽·追踪香囊：被追踪者成功使用技能/攻击时记录到 trackRecords
@@ -434,10 +494,19 @@ wss.on('connection', (ws) => {
     switch (msg.type) {
       // ===== 房间管理 =====
       case 'room_create': {
-        const roomId = String(msg.roomId || '').trim() || 'room_' + Math.random().toString(36).slice(2, 8);
-        if (gameRooms.has(roomId)) {
-          wsSend(ws, { type: 'error', message: '房间码已存在' });
-          return;
+        // 房间码：留空自动生成 6 位易读码；手填则规范化并校验
+        let roomId = normalizeRoomCode(msg.roomId);
+        if (roomId) {
+          if (!/^[A-Z0-9]{4,8}$/.test(roomId)) {
+            wsSend(ws, { type: 'error', message: '房间码只能使用 4-8 位字母或数字' });
+            return;
+          }
+          if (gameRooms.has(roomId)) {
+            wsSend(ws, { type: 'error', message: '房间码已存在' });
+            return;
+          }
+        } else {
+          roomId = generateRoomCode();
         }
         const playerId = 'p_' + Math.random().toString(36).slice(2, 8);
         ws.playerId = playerId;
@@ -456,6 +525,8 @@ wss.on('connection', (ws) => {
           readySet: new Set(), // 已准备玩家
           votes: [],           // 投票收集
           gameStarted: false,
+          gamePlayerMap: new Map(), // serverId -> 游戏角色 id
+          lastActivity: Date.now(),
         });
         // 同步到公开房间注册表
         if (!rooms.has(roomId)) {
@@ -477,7 +548,7 @@ wss.on('connection', (ws) => {
       }
 
       case 'room_join': {
-        const roomId = String(msg.roomId || '').trim();
+        const roomId = normalizeRoomCode(msg.roomId); // 容错：小写/空格/连字符
         const room = gameRooms.get(roomId);
         if (!room) {
           wsSend(ws, { type: 'error', message: '房间不存在' });
@@ -516,11 +587,20 @@ wss.on('connection', (ws) => {
           if (pid !== playerId) wsSend(p.ws, { type: 'player_joined', playerId, name, isSpectator });
         });
         syncRoomListToRoom(room);
+        room.lastActivity = Date.now();
         // 游戏进行中：重连玩家恢复角色映射并立即回到游戏；观战者立即观战
         if (room.gameStarted && room.game) {
           const gp = isRejoin ? room.game.players.find(p => p.name === name) : null;
           if (gp) {
-            room.gamePlayerMap.set(playerId, gp.id); // 恢复映射（断线重连）
+            // 清掉该角色可能残留的旧 serverId 映射（断线重连换了一条连接）
+            if (room.gamePlayerMap) {
+              for (const [sid, gid] of room.gamePlayerMap) {
+                if (gid === gp.id) room.gamePlayerMap.delete(sid);
+              }
+              room.gamePlayerMap.set(playerId, gp.id); // 恢复映射（断线重连）
+            }
+            sendToast(ws, `✅ 已重新连接，角色：${gp.name}`, 'success');
+            broadcastToast(room, `🔄 ${name} 重新连接了`, 'warn');
           }
           wsSend(ws, { type: 'from_host', data: { type: 'game_started' } });
           const st = serializeGame(room.game, gp ? gp.id : null);
@@ -541,6 +621,7 @@ wss.on('connection', (ws) => {
           gameRooms.delete(room.roomId);
         } else if (ws.playerId) {
           room.players.delete(ws.playerId);
+          if (room.gamePlayerMap) room.gamePlayerMap.delete(ws.playerId);
           room.players.forEach((p) => wsSend(p.ws, { type: 'player_left', playerId: ws.playerId, name: ws.playerName }));
           wsSend(room.hostWs, { type: 'player_left', playerId: ws.playerId, name: ws.playerName });
           syncRoomListToRoom(room);
@@ -655,6 +736,7 @@ wss.on('connection', (ws) => {
           gi++;
         });
         room.gameStarted = true;
+        room.lastActivity = Date.now();
         // 通知所有玩家进入游戏（先 game_started + game_init 让前端挂载 OnlineGame）
         // 房主
         wsSend(room.hostWs, { type: 'from_host', data: { type: 'game_started' } });
@@ -694,29 +776,39 @@ wss.on('connection', (ws) => {
         const myGamePlayerId = room.gamePlayerMap ? room.gamePlayerMap.get(ws.playerId) : null;
         if (!myGamePlayerId) return;
 
+        room.lastActivity = Date.now();
+        let advanced = false;
+
         switch (action) {
           case 'move': {
             // 只用服务器映射的玩家身份，忽略客户端传的 playerId（防越权移动别人的角色）
-            movePlayer(game, myGamePlayerId, payload.locationId);
+            const result = movePlayer(game, myGamePlayerId, payload.locationId);
+            if (result.ok) {
+              sendToast(ws, `✅ 已移动到 ${result.locationName}${result.teleport ? '（传送）' : ''}${result.doubleMoveActive ? '，疾行还可再移动一次' : ''}`, 'success');
+            } else if (result.msg) {
+              sendToast(ws, '⚠️ ' + result.msg, 'error');
+            }
             break;
           }
           case 'attack': {
             const result = useSkill(game, myGamePlayerId, 'basic_kill', payload.targetId);
             trackSkillUse(game, myGamePlayerId, 'basic_kill', result);
-            if (result && !result.ok && result.msg) {
-              wsSend(ws, { type: 'from_host', data: { type: 'private_info', text: '⚠️ ' + result.msg } });
-            }
+            if (result && !result.ok && result.msg) sendToast(ws, '⚠️ ' + result.msg, 'error');
+            else if (result && result.ok) sendToast(ws, '✅ 已出刀', 'success');
             break;
           }
           case 'skill': {
             const result = useSkill(game, myGamePlayerId, payload.skillId, payload.targetId, payload.targetLocationId);
             trackSkillUse(game, myGamePlayerId, payload.skillId, result);
             if (result && !result.ok && result.msg) {
-              // 技能/攻击失败：私发原因（此前静默拒绝，操作者完全不知道发生了什么）
-              wsSend(ws, { type: 'from_host', data: { type: 'private_info', text: '⚠️ ' + result.msg } });
+              // 技能失败：私发 toast 原因（此前静默拒绝，操作者完全不知道发生了什么）
+              sendToast(ws, '⚠️ ' + result.msg, 'error');
+            } else if (result && result.ok) {
+              const skillName = SKILL_NAMES[payload.skillId] || '技能';
+              sendToast(ws, `✅ 【${skillName}】使用成功`, 'success');
             }
             if (result && result.reveal) {
-              // 探查结果私发
+              // 探查结果私发（弹窗）
               wsSend(ws, { type: 'from_host', data: {
                 type: 'private_info',
                 text: `【查验】${game.players.find(x => x.id === result.reveal.targetId)?.name} 的身份是：${result.reveal.identity === 'killer' ? '杀手' : '平民'}`,
@@ -741,25 +833,32 @@ wss.on('connection', (ws) => {
               room.votes = [];
               settleDeaths(game); // 房主手动推进也结算延迟死亡
               nextPhase(game);
+              advanced = true; // 已手动推进，跳过下面的自动推进（否则一次 next 会连推两个阶段）
             }
             break;
           }
           default: break;
         }
 
-        // 全部存活真人就绪 → 自动推进（空壳不是真人，不阻塞游戏）
-        const aliveIds = game.players.filter(p => p.status === 'alive' && !p.isBot).map(p => p.id);
-        const allReady = aliveIds.length === 0 || aliveIds.every(id => room.readySet.has(id));
-        if (allReady) {
-          room.readySet = new Set();
-          // 延迟死亡结算：所有人准备后，濒死玩家成为尸体（变异复活除外）
-          settleDeaths(game);
-          if (game.phase === 'vote') {
-            submitVotes(game, room.votes);
-            room.votes = [];
-            nextPhase(game);
-          } else {
-            nextPhase(game);
+        // 全部「在线且存活」的真人就绪 → 自动推进
+        // 空壳不阻塞；掉线玩家不算（否则它的 ready 永不再来 → 整局永久卡死）
+        if (!advanced) {
+          const onlineIds = onlineGamePlayerIds(room);
+          const aliveIds = game.players
+            .filter(p => p.status === 'alive' && !p.isBot && onlineIds.has(p.id))
+            .map(p => p.id);
+          const allReady = aliveIds.length === 0 || aliveIds.every(id => room.readySet.has(id));
+          if (allReady) {
+            room.readySet = new Set();
+            // 延迟死亡结算：所有人准备后，濒死玩家成为尸体（变异复活除外）
+            settleDeaths(game);
+            if (game.phase === 'vote') {
+              submitVotes(game, room.votes);
+              room.votes = [];
+              nextPhase(game);
+            } else {
+              nextPhase(game);
+            }
           }
         }
 
@@ -802,11 +901,12 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'room_register':
-        if (msg.roomId && !rooms.has(msg.roomId)) {
+      case 'room_register': {
+        const regId = normalizeRoomCode(msg.roomId);
+        if (regId && !rooms.has(regId)) {
           const now = Date.now();
-          rooms.set(msg.roomId, {
-            roomId: msg.roomId,
+          rooms.set(regId, {
+            roomId: regId,
             hostId: msg.hostId || '',
             hostName: (msg.hostName || '房主').slice(0, 20),
             playerCount: Number(msg.playerCount) || 1,
@@ -819,18 +919,21 @@ wss.on('connection', (ws) => {
           broadcastRoomList();
         }
         break;
+      }
 
-      case 'room_update':
-        if (rooms.has(msg.roomId)) {
-          const room = rooms.get(msg.roomId);
+      case 'room_update': {
+        const updId = normalizeRoomCode(msg.roomId);
+        if (rooms.has(updId)) {
+          const room = rooms.get(updId);
           if (typeof msg.playerCount === 'number') room.playerCount = msg.playerCount;
           room.updatedAt = Date.now();
           broadcastRoomList();
         }
         break;
+      }
 
       case 'room_unregister':
-        rooms.delete(msg.roomId);
+        rooms.delete(normalizeRoomCode(msg.roomId));
         broadcastRoomList();
         break;
 
@@ -851,8 +954,13 @@ wss.on('connection', (ws) => {
         gameRooms.delete(room.roomId);
       } else if (ws.playerId) {
         room.players.delete(ws.playerId);
+        if (room.gamePlayerMap) room.gamePlayerMap.delete(ws.playerId);
         room.players.forEach((p) => wsSend(p.ws, { type: 'player_left', playerId: ws.playerId, name: ws.playerName }));
         wsSend(room.hostWs, { type: 'player_left', playerId: ws.playerId, name: ws.playerName });
+        // 对局中断线：通知其他人（角色仍在局内，重连可恢复；就绪判定已排除离线玩家，不会卡死整局）
+        const leftName = ws.playerName || '一名玩家';
+        broadcastToast(room, room.gameStarted ? `⚠️ ${leftName} 掉线了（可重连恢复）` : `👋 ${leftName} 离开了房间`, 'warn');
+        room.lastActivity = Date.now();
         syncRoomListToRoom(room);
       }
     }
